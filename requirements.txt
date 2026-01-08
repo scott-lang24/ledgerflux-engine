@@ -4,5 +4,4 @@ pdfplumber
 plotly
 streamlit-option-menu
 streamlit-lottie
-xhtml2pdf
 requests
