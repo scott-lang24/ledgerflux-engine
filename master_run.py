@@ -18,10 +18,15 @@ from streamlit_lottie import st_lottie
 from xhtml2pdf import pisa # <--- NEW LIBRARY FOR PDF GENERATION
 from io import BytesIO
 
-# --- 1. EMAIL CONFIGURATION ---
-EMAIL_SENDER ="audit.ledgerflux@gmail.com" # <--- ENTER YOUR GMAIL
-EMAIL_PASSWORD ="otyf wtfh jwhw kywf"  # <--- ENTER YOUR APP PASSWORD
-
+# --- 1. EMAIL CONFIGURATION (SECURE MODE) ---
+# This tells Python: "Look in the secret vault first. If empty, use the placeholder."
+try:
+    EMAIL_SENDER = st.secrets["EMAIL_SENDER"]
+    EMAIL_PASSWORD = st.secrets["EMAIL_PASSWORD"]
+except:
+    EMAIL_SENDER = "audit.ledgerflux@gmail.com" # Fallback for local testing
+    EMAIL_PASSWORD = "otyf wtfh jwhw kywf"
+    
 # --- 2. CONFIGURATION ---
 st.set_page_config(
     page_title="LedgerFlux Portal", 
@@ -406,4 +411,5 @@ else:
     elif selected == "Settings":
         st.title("Settings")
         st.text_input("User ID", value="user1", disabled=True)
+
         st.toggle("Enable Dark Mode", value=True, disabled=True)
