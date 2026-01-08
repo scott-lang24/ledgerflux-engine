@@ -15,18 +15,17 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 from streamlit_option_menu import option_menu
 from streamlit_lottie import st_lottie
-from xhtml2pdf import pisa # <--- NEW LIBRARY FOR PDF GENERATION
+# from xhtml2pdf import pisa  <--- REMOVED TO FIX CLOUD CRASH
 from io import BytesIO
 
 # --- 1. EMAIL CONFIGURATION (SECURE MODE) ---
-# This tells Python: "Look in the secret vault first. If empty, use the placeholder."
 try:
     EMAIL_SENDER = st.secrets["EMAIL_SENDER"]
     EMAIL_PASSWORD = st.secrets["EMAIL_PASSWORD"]
 except:
-    EMAIL_SENDER = "audit.ledgerflux@gmail.com" # Fallback for local testing
+    EMAIL_SENDER = "audit.ledgerflux@gmail.com"
     EMAIL_PASSWORD = "otyf wtfh jwhw kywf"
-    
+
 # --- 2. CONFIGURATION ---
 st.set_page_config(
     page_title="LedgerFlux Portal", 
@@ -43,16 +42,12 @@ pro_css = """
     html, body, [class*="css"] { font-family: 'Inter', sans-serif !important; color: #E0E0E0; }
     .stApp { background-color: #050505; } 
     section[data-testid="stSidebar"] { background-color: #0E0E10; border-right: 1px solid #1F1F1F; }
-    
     div[data-testid="stMetric"] { background: #121212; border: 1px solid #2A2A2A; border-radius: 16px; padding: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
-    
     .stButton > button { background: linear-gradient(90deg, #6C5DD3 0%, #8B78E6 100%); color: white; border-radius: 8px; border: none; height: 50px; width: 100%; font-weight: 700; font-size: 16px; transition: transform 0.2s; }
     .stButton > button:hover { transform: scale(1.02); }
-    
     table { width: 100%!important; border-collapse: collapse !important; color: #E0E0E0 !important; background-color: #121212 !important; border-radius: 10px !important; overflow: hidden !important; }
     th { background-color: #1F1F1F !important; color: #8F90A6 !important; font-weight: 600 !important; padding: 12px !important; text-align: left !important; }
     td { border-bottom: 1px solid #2A2A2A !important; padding: 12px !important; }
-    
     header {visibility: visible !important; background-color: #050505;}
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
 </style>
@@ -70,7 +65,7 @@ def load_lottie_url(url: str):
 lottie_scanning = load_lottie_url("https://assets10.lottiefiles.com/packages/lf20_pwc8es71.json")
 lottie_email = load_lottie_url("https://assets5.lottiefiles.com/packages/lf20_swoi6t8m.json")
 
-# --- 5. THE UNIVERSAL SCAM DATABASE (PRESERVED) ---
+# --- 5. THE UNIVERSAL SCAM DATABASE ---
 SCAM_DATABASE = {
     "Parcel": [
         {"name": "GSR Late Delivery", "desc": "Package delivered 60s past commit time", "impact": 1.0},
@@ -100,7 +95,7 @@ SCAM_DATABASE = {
     ]
 }
 
-# --- 6. HTML REPORT GENERATOR (UPDATED WITH PRINT BUTTON) ---
+# --- 6. HTML REPORT GENERATOR ---
 def generate_html_report(audit_data, details_df):
     html = f"""
     <html>
@@ -120,16 +115,8 @@ def generate_html_report(audit_data, details_df):
             td {{ padding: 12px; border-bottom: 1px solid #eee; font-size: 14px; color: #444; }}
             tr:last-child td {{ border-bottom: none; }}
             .footer {{ margin-top: 50px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #aaa; text-align: center; }}
-            
-            /* Print Button Style - Hidden when printing */
-            .print-btn {{
-                background-color: #333; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-bottom: 20px; cursor: pointer;
-            }}
-            @media print {{
-                .print-btn {{ display: none; }}
-                body {{ background-color: white; padding: 0; }}
-                .container {{ box-shadow: none; border: none; }}
-            }}
+            .print-btn {{ background-color: #333; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-bottom: 20px; cursor: pointer; }}
+            @media print {{ .print-btn {{ display: none; }} body {{ background-color: white; padding: 0; }} .container {{ box-shadow: none; border: none; }} }}
         </style>
     </head>
     <body>
@@ -170,17 +157,8 @@ def generate_html_report(audit_data, details_df):
     """
     return html
 
-# --- 7. NEW PDF CONVERTER (For Email) ---
-def convert_html_to_pdf(html_content):
-    result = BytesIO()
-    # xhtml2pdf requires somewhat simpler CSS, but usually handles tables well.
-    # We pass the HTML content directly.
-    pisa_status = pisa.CreatePDF(src=html_content, dest=result)
-    if pisa_status.err: return None
-    return result.getvalue()
-
-# --- 8. UPDATED EMAIL FUNCTION (PDF Attachment) ---
-def send_real_email(to_email, subject, body, pdf_bytes=None, filename="Audit_Report.pdf"):
+# --- 7. EMAIL FUNCTION (HTML VERSION) ---
+def send_real_email(to_email, subject, body, html_content=None, filename="Audit_Report.html"):
     if "YOUR_EMAIL" in EMAIL_SENDER:
         return False, "⚠️ Email not configured."
     try:
@@ -190,9 +168,9 @@ def send_real_email(to_email, subject, body, pdf_bytes=None, filename="Audit_Rep
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain'))
         
-        # ATTACH PDF BYTES
-        if pdf_bytes:
-            part = MIMEApplication(pdf_bytes, Name=filename)
+        # ATTACH HTML FILE
+        if html_content:
+            part = MIMEApplication(html_content.encode('utf-8'), Name=filename)
             part['Content-Disposition'] = f'attachment; filename="{filename}"'
             msg.attach(part)
             
@@ -205,7 +183,7 @@ def send_real_email(to_email, subject, body, pdf_bytes=None, filename="Audit_Rep
     except Exception as e:
         return False, str(e)
 
-# --- 9. DATABASE & AUTH ---
+# --- 8. DATABASE & AUTH ---
 def get_db_connection(): return sqlite3.connect(DB_NAME)
 def init_db():
     conn = get_db_connection()
@@ -220,7 +198,7 @@ def init_db():
     conn.close()
 init_db()
 
-# --- 10. THE "GOD MODE" LOGIC ENGINE (PRESERVED) ---
+# --- 9. LOGIC ENGINE ---
 def parse_and_save_invoice(file, company_name):
     text = ""
     try:
@@ -283,7 +261,7 @@ def get_client_stats(user_id):
     conn.close()
     return df
 
-# --- 11. MAIN APP ---
+# --- 10. MAIN APP ---
 if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
 
 def login():
@@ -316,7 +294,7 @@ else:
     
     with st.sidebar:
         st.markdown("## ⚡ LedgerFlux") 
-        st.caption("v5.1.0 Universal PDF")
+        st.caption("v5.2.0 Universal Cloud")
         st.markdown("<br>", unsafe_allow_html=True)
         selected = option_menu(
             menu_title=None,
@@ -369,30 +347,24 @@ else:
             
             html_report = generate_html_report(res, df_det)
             
-            # --- ACTIONS: PDF LOGIC ---
+            # --- ACTIONS: SAFE MODE (HTML ONLY) ---
             c1, c2 = st.columns(2)
             with c1:
-                st.download_button("⬇️ Download Official Certificate (HTML)", data=html_report, file_name=f"Audit_{res['id']}.html", mime="text/html")
-                st.caption("*Open HTML and click 'Save as PDF' for best quality")
+                st.download_button("⬇️ Download Official Certificate", data=html_report, file_name=f"Audit_{res['id']}.html", mime="text/html")
+                st.caption("*To save as PDF: Open the HTML file and click 'Save as PDF'.")
             with c2:
                 email = st.text_input("Email Report To:")
                 if st.button("Send via Secure Mail") and email:
-                    # GENERATE PDF BYTES
-                    pdf_bytes = convert_html_to_pdf(html_report)
-                    
-                    if pdf_bytes:
-                        if lottie_email: st_lottie(lottie_email, height=100, key="mail_anim")
-                        ok, msg = send_real_email(
-                            email, 
-                            f"Audit Certificate: {res['id']}", 
-                            "Please find the attached formal audit certificate (PDF).", 
-                            pdf_bytes=pdf_bytes, 
-                            filename=f"Audit_{res['id']}.pdf"
-                        )
-                        if ok: st.success("PDF Sent Successfully!")
-                        else: st.error(msg)
-                    else:
-                        st.error("Error generating PDF. Please check dependencies.")
+                    if lottie_email: st_lottie(lottie_email, height=100, key="mail_anim")
+                    ok, msg = send_real_email(
+                        email, 
+                        f"Audit Certificate: {res['id']}", 
+                        "Please find the attached formal audit certificate (HTML).", 
+                        html_content=html_report, 
+                        filename=f"Audit_{res['id']}.html"
+                    )
+                    if ok: st.success("Report Sent Successfully!")
+                    else: st.error(msg)
     
     elif selected == "Analytics":
         st.title("Financial Intelligence")
@@ -411,5 +383,4 @@ else:
     elif selected == "Settings":
         st.title("Settings")
         st.text_input("User ID", value="user1", disabled=True)
-
         st.toggle("Enable Dark Mode", value=True, disabled=True)
