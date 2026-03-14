@@ -1,4 +1,4 @@
-import streamlit as st
+ import streamlit as st
 import pandas as pd
 import pdfplumber
 import re
@@ -298,6 +298,14 @@ else:
         st.markdown("<br>", unsafe_allow_html=True)
         selected = option_menu(
             menu_title=None,
+            # Add this above the file uploader in the "Request New Check" section
+st.subheader("Audit Parameters")
+demo_mode = st.selectbox(
+    "Select Carrier / Trade Lane Context:", 
+    ["Auto-Detect", "Cold Chain / Pharma (Air)", "Heavy TEU / Ocean (Port)", "FMCG / LTL (Road)"]
+)
+
+uploaded_file = st.file_uploader("Upload Invoice (PDF)", type=['pdf'])
             options=["Dashboard", "Request New Check", "Analytics", "Settings"], 
             icons=["grid-fill", "plus-circle-fill", "graph-up-arrow", "gear-fill"],
             menu_icon="cast", default_index=0, 
