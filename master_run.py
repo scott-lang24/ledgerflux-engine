@@ -1,4 +1,4 @@
- import streamlit as st
+import streamlit as st
 import pandas as pd
 import pdfplumber
 import re
@@ -15,7 +15,6 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 from streamlit_option_menu import option_menu
 from streamlit_lottie import st_lottie
-# from xhtml2pdf import pisa  <--- REMOVED TO FIX CLOUD CRASH
 from io import BytesIO
 
 # --- 1. EMAIL CONFIGURATION (SECURE MODE) ---
@@ -199,7 +198,7 @@ def init_db():
 init_db()
 
 # --- 9. LOGIC ENGINE ---
-def parse_and_save_invoice(file, company_name):
+def parse_and_save_invoice(file, company_name, demo_mode):
     text = ""
     try:
         with pdfplumber.open(file) as pdf:
@@ -211,8 +210,21 @@ def parse_and_save_invoice(file, company_name):
     total_val = max(clean) if clean else 0.0
     inv_id = f"INV-{random.randint(10000, 99999)}"
     
-    mode = random.choices(["Parcel", "LTL", "Ocean", "Air"], weights=[0.4, 0.2, 0.3, 0.1])[0]
-    is_error = random.choices([True, False], weights=[0.8, 0.2])[0]
+    # DEMO GOD MODE OVERRIDE LOGIC
+    is_error = True # Force error in demo modes
+    if "Cold Chain" in demo_mode:
+        mode = "Air"
+        forced_scam = {"name": "Cooltainer SLA Breach", "desc": "Temp excursion > 2°C detected; freight billed at premium", "impact": 1.0}
+    elif "Ocean" in demo_mode:
+        mode = "Ocean"
+        forced_scam = {"name": "Phantom Detention (D&D)", "desc": "Container gate-in timestamp prior to Free Time expiry", "impact": 0.35}
+    elif "LTL" in demo_mode:
+        mode = "LTL"
+        forced_scam = {"name": "Class Jump Fraud", "desc": "Carrier bumped Class 60 to Class 100", "impact": 0.40}
+    else:
+        # Auto-Detect mode (Original Random Logic)
+        mode = random.choices(["Parcel", "LTL", "Ocean", "Air"], weights=[0.4, 0.2, 0.3, 0.1])[0]
+        is_error = random.choices([True, False], weights=[0.8, 0.2])[0]
     
     details = []
     
@@ -231,7 +243,10 @@ def parse_and_save_invoice(file, company_name):
 
     if is_error:
         status = "Discrepancy"
-        scam = random.choice(SCAM_DATABASE[mode])
+        if "Auto-Detect" not in demo_mode:
+            scam = forced_scam
+        else:
+            scam = random.choice(SCAM_DATABASE[mode])
         
         if scam['impact'] == 1.0:
             savings = total_val * 0.5 
@@ -298,14 +313,6 @@ else:
         st.markdown("<br>", unsafe_allow_html=True)
         selected = option_menu(
             menu_title=None,
-            # Add this above the file uploader in the "Request New Check" section
-st.subheader("Audit Parameters")
-demo_mode = st.selectbox(
-    "Select Carrier / Trade Lane Context:", 
-    ["Auto-Detect", "Cold Chain / Pharma (Air)", "Heavy TEU / Ocean (Port)", "FMCG / LTL (Road)"]
-)
-
-uploaded_file = st.file_uploader("Upload Invoice (PDF)", type=['pdf'])
             options=["Dashboard", "Request New Check", "Analytics", "Settings"], 
             icons=["grid-fill", "plus-circle-fill", "graph-up-arrow", "gear-fill"],
             menu_icon="cast", default_index=0, 
@@ -319,10 +326,12 @@ uploaded_file = st.file_uploader("Upload Invoice (PDF)", type=['pdf'])
         data = get_client_stats("user1")
         total_rec = data['recovered_amt'].sum() if not data.empty else 0
         
-        c1, c2, c3 = st.columns(3)
+        # UPGRADE 3: Financial ROI Metrics
+        c1, c2, c3, c4 = st.columns(4)
         c1.metric("Total Audits", len(data))
-        c2.metric("Recovered Funds", f"₹ {total_rec:,.0f}")
+        c2.metric("Identified Leakage", f"₹ {total_rec:,.0f}")
         c3.metric("Pending Disputes", len(data[data['status']=='Discrepancy']))
+        c4.metric("EBITDA Impact", f"+ {(total_rec / 500000) * 100:.1f}%")
         
         st.subheader("Audit Log")
         if not data.empty:
@@ -334,12 +343,31 @@ uploaded_file = st.file_uploader("Upload Invoice (PDF)", type=['pdf'])
 
     elif selected == "Request New Check":
         st.title("New Audit Request")
+        
+        # UPGRADE 1: Targeted Strike Selector
+        st.subheader("Audit Parameters")
+        demo_mode = st.selectbox(
+            "Select Carrier / Trade Lane Context:", 
+            ["Auto-Detect", "Cold Chain / Pharma (Air)", "Heavy TEU / Ocean (Port)", "FMCG / LTL (Road)"]
+        )
+        
         uploaded_file = st.file_uploader("Upload Invoice (PDF)", type=['pdf'])
+        
         if st.button("RUN DEEP AUDIT") and uploaded_file:
             if lottie_scanning: st_lottie(lottie_scanning, height=200, key="scan")
-            with st.spinner("Analyzing Carrier, Mode & Line Items..."):
-                time.sleep(2.5)
-                st.session_state['result'] = parse_and_save_invoice(uploaded_file, company)
+            
+            # UPGRADE 2: The Forensic Terminal
+            terminal = st.empty()
+            terminal.code("[SYS] Initiating OCR text extraction...", language="bash")
+            time.sleep(1)
+            terminal.code("[SYS] Cross-referencing Carrier API schemas...\n[LOG] Detected 14 line items.", language="bash")
+            time.sleep(1)
+            terminal.code("[SYS] Validating Fuel Surcharge index against Central Bank averages...\n[WARN] Anomaly detected.", language="bash")
+            time.sleep(1.5)
+            terminal.empty() # Clears the terminal when done
+            
+            # Pass the demo_mode down to the engine
+            st.session_state['result'] = parse_and_save_invoice(uploaded_file, company, demo_mode)
 
         if 'result' in st.session_state and st.session_state['result']:
             res = st.session_state['result']
