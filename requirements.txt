@@ -5,3 +5,7 @@ plotly
 streamlit-option-menu
 streamlit-lottie
 requests
+fastapi
+uvicorn
+python-multipart
+sqlalchemy
