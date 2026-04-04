@@ -10,6 +10,7 @@ import plotly.express as px
 import random
 import requests
 import smtplib
+import zipfile  # <-- NEW: Added for batch processing
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
@@ -351,25 +352,71 @@ else:
             ["Auto-Detect", "Cold Chain / Pharma (Air)", "Heavy TEU / Ocean (Port)", "FMCG / LTL (Road)"]
         )
         
-        uploaded_file = st.file_uploader("Upload Invoice (PDF)", type=['pdf'])
+        # CHANGED: Now accepts PDF and ZIP
+        uploaded_file = st.file_uploader("Upload Invoice(s) (PDF or .ZIP batch)", type=['pdf', 'zip'])
         
-        if st.button("RUN DEEP AUDIT") and uploaded_file:
+        if st.button("Run Autonomous Audit") and uploaded_file:
             if lottie_scanning: st_lottie(lottie_scanning, height=200, key="scan")
             
-            # UPGRADE 2: The Forensic Terminal
             terminal = st.empty()
-            terminal.code("[SYS] Initiating OCR text extraction...", language="bash")
-            time.sleep(1)
-            terminal.code("[SYS] Cross-referencing Carrier API schemas...\n[LOG] Detected 14 line items.", language="bash")
-            time.sleep(1)
-            terminal.code("[SYS] Validating Fuel Surcharge index against Central Bank averages...\n[WARN] Anomaly detected.", language="bash")
-            time.sleep(1.5)
-            terminal.empty() # Clears the terminal when done
             
-            # Pass the demo_mode down to the engine
-            st.session_state['result'] = parse_and_save_invoice(uploaded_file, company, demo_mode)
+            # --- BATCH ZIP LOGIC ---
+            if uploaded_file.name.endswith('.zip'):
+                terminal.code("[SYS] ZIP Archive detected. Unpacking batch...", language="bash")
+                time.sleep(1)
+                
+                results = []
+                with zipfile.ZipFile(uploaded_file, 'r') as z:
+                    pdf_files = [f for f in z.namelist() if f.endswith('.pdf')]
+                    terminal.code(f"[LOG] Found {len(pdf_files)} invoices. Processing...", language="bash")
+                    
+                    for pdf_name in pdf_files:
+                        with z.open(pdf_name) as pdf_file:
+                            pdf_bytes = BytesIO(pdf_file.read())
+                            res = parse_and_save_invoice(pdf_bytes, company, demo_mode)
+                            if res: results.append(res)
+                
+                terminal.empty()
+                st.success(f"Batch Analysis Complete: Processed {len(results)} Invoices")
+                
+                # Batch Dashboard
+                total_billed = sum(r['total'] for r in results)
+                total_savings = sum(r['savings'] for r in results)
+                
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Invoices Audited", len(results))
+                c2.metric("Total Invoiced", f"₹ {total_billed:,.2f}")
+                c3.metric("Total Recoverable", f"₹ {total_savings:,.2f}")
+                
+                st.subheader("Batch Breakdown")
+                batch_df = pd.DataFrame([{
+                    "Invoice ID": r['id'],
+                    "Mode": r['mode'],
+                    "Status": r['status'],
+                    "Billed": f"₹ {r['total']:,.2f}",
+                    "Recoverable": f"₹ {r['savings']:,.2f}"
+                } for r in results])
+                
+                def color_status(val):
+                    color = '#FF5252' if val == 'Discrepancy' else '#00E676'
+                    return f'color: {color}; font-weight: bold;'
+                
+                st.dataframe(batch_df.style.map(color_status, subset=['Status']), use_container_width=True)
+                
+            # --- SINGLE PDF LOGIC (Your Original Code) ---
+            else:
+                terminal.code("[SYS] Initiating OCR text extraction...", language="bash")
+                time.sleep(1)
+                terminal.code("[SYS] Cross-referencing Carrier API schemas...\n[LOG] Detected 14 line items.", language="bash")
+                time.sleep(1.5)
+                terminal.empty() 
+                
+                res = parse_and_save_invoice(uploaded_file, company, demo_mode)
+                if res:
+                    st.session_state['result'] = res
 
-        if 'result' in st.session_state and st.session_state['result']:
+        # Display single result actions (Your Original Code)
+        if 'result' in st.session_state and st.session_state['result'] and not (uploaded_file and uploaded_file.name.endswith('.zip')):
             res = st.session_state['result']
             st.success(f"Analysis Complete: Detected {res['mode']} Invoice")
             
@@ -383,11 +430,9 @@ else:
             
             html_report = generate_html_report(res, df_det)
             
-            # --- ACTIONS: SAFE MODE (HTML ONLY) ---
             c1, c2 = st.columns(2)
             with c1:
                 st.download_button("⬇️ Download Official Certificate", data=html_report, file_name=f"Audit_{res['id']}.html", mime="text/html")
-                st.caption("*To save as PDF: Open the HTML file and click 'Save as PDF'.")
             with c2:
                 email = st.text_input("Email Report To:")
                 if st.button("Send via Secure Mail") and email:
@@ -395,13 +440,13 @@ else:
                     ok, msg = send_real_email(
                         email, 
                         f"Audit Certificate: {res['id']}", 
-                        "Please find the attached formal audit certificate (HTML).", 
+                        "Please find the attached formal audit certificate.", 
                         html_content=html_report, 
                         filename=f"Audit_{res['id']}.html"
                     )
                     if ok: st.success("Report Sent Successfully!")
                     else: st.error(msg)
-    
+
     elif selected == "Analytics":
         st.title("Financial Intelligence")
         data = get_client_stats("user1")
