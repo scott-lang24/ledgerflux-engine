@@ -4,11 +4,7 @@ const UploadArea = ({ onSuccess }) => {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
-<<<<<<< HEAD:frontend/src/components/UploadArea.jsx
-  const [isDragging, setIsDragging] = useState(false);
-=======
   const [isDragging, setIsDragging] = useState(false); // New state for drag visuals
->>>>>>> bd135f07aac58fdd667722cb3988662a628e8915:frontend/components/UploadArea.jsx
 
   const validateAndSetFile = (selectedFile) => {
     if (selectedFile && selectedFile.name.endsWith('.zip')) {
@@ -24,10 +20,7 @@ const UploadArea = ({ onSuccess }) => {
     validateAndSetFile(e.target.files[0]);
   };
 
-<<<<<<< HEAD:frontend/src/components/UploadArea.jsx
-=======
   // --- NEW DRAG AND DROP HANDLERS ---
->>>>>>> bd135f07aac58fdd667722cb3988662a628e8915:frontend/components/UploadArea.jsx
   const handleDragOver = (e) => {
     e.preventDefault();
     setIsDragging(true);
@@ -46,10 +39,7 @@ const UploadArea = ({ onSuccess }) => {
       validateAndSetFile(e.dataTransfer.files[0]);
     }
   };
-<<<<<<< HEAD:frontend/src/components/UploadArea.jsx
-=======
   // ----------------------------------
->>>>>>> bd135f07aac58fdd667722cb3988662a628e8915:frontend/components/UploadArea.jsx
 
   const handleUpload = async () => {
     if (!file) return;
@@ -103,10 +93,7 @@ const UploadArea = ({ onSuccess }) => {
         className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-6 cursor-pointer"
       />
       
-<<<<<<< HEAD:frontend/src/components/UploadArea.jsx
-=======
       {/* Visual indicator of what file is loaded */}
->>>>>>> bd135f07aac58fdd667722cb3988662a628e8915:frontend/components/UploadArea.jsx
       {file && (
         <div className="mb-4 text-sm font-medium text-slate-700 bg-white p-2 rounded border shadow-sm inline-block">
           📎 {file.name} ready for audit
