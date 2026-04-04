@@ -50,7 +50,7 @@ const UploadArea = () => {
 
   return (
     <div className="max-w-2xl mx-auto p-8 bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg text-center mt-10">
-      <h2 className="text-2xl font-bold text-gray-800 mb-4">LedgerFlux Forensic Audit Engine</h2>
+      <h2 className="text-red-600">LedgerFlux v2.0 - TRACER BULLET</h2>
       <p className="text-gray-600 mb-8">Upload a ZIP file containing historical carrier invoices (PDFs).</p>
       
       <input 
