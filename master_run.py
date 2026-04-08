@@ -131,23 +131,12 @@ else:
             st.table(df_show.style.map(color_row, subset=['status']).format({'recovered_amt': '₹ {:,.2f}'}))
 
     # --- REQUEST NEW CHECK TAB (The Hybrid UI + Engine) ---
-   elif selected == "Request New Check":
+    elif selected == "Request New Check":
         st.title("New Audit Request")
         
         st.subheader("Audit Parameters")
-        
-        # --- THE DUAL-PARAMETER SELECTOR ---
-        c_param1, c_param2 = st.columns(2)
-        with c_param1:
-            carrier = st.selectbox("Carrier Contract (Vision Schema):", ["Delhivery", "BlueDart", "Safexpress"])
-        with c_param2:
-            trade_lane = st.selectbox("Trade Lane / Mode (Rule Engine):", [
-                "Auto-Detect Mode", 
-                "Surface / LTL (Road)", 
-                "Express / Air Parcel", 
-                "Cold Chain / Pharma",
-                "Heavy TEU / Ocean"
-            ])
+        # Modified to feed the universal OCR engine
+        carrier = st.selectbox("Select Target Carrier Contract:", ["Delhivery", "BlueDart", "Safexpress"])
         
         uploaded_file = st.file_uploader("Upload Invoice(s) (PDF or .ZIP batch)", type=['pdf', 'zip'])
         
