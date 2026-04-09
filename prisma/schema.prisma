@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 1. The Tenancy Foundation
+model Client {
+  id               String            @id @default(uuid())
+  company_name     String
+  subdomain        String?           @unique
+  created_at       DateTime          @default(now())
+  
+  users            User[]
+  contracts        CarrierContract[]
+  audits           Audit[]
+}
+
+// 2. Role-Based Access Control
+model User {
+  id            String   @id @default(uuid())
+  clientId      String
+  email         String   @unique
+  password_hash String
+  role          String   @default("VIEWER") // 'ADMIN', 'UPLOADER', 'VIEWER'
+  
+  client        Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+// 3. The Carrier Rate Cards
+model CarrierContract {
+  id             String   @id @default(uuid())
+  clientId       String
+  carrier_name   String   // e.g., "Delhivery"
+  trade_lane     String   // e.g., "Express Air"
+  valid_from     DateTime
+  valid_to       DateTime?
+  
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  line_items     RateLineItem[]
+}
+
+// 4. The Forensic Math Rules
+model RateLineItem {
+  id               String   @id @default(uuid())
+  contractId       String
+  charge_type      String   // e.g., "Base Freight", "Fuel Surcharge"
+  rate_value       Float
+  calculation_type String   // e.g., "PER_KG", "PERCENTAGE", "FLAT"
+  
+  contract         CarrierContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+}
+
+// 5. The Audit Ledger
+model Audit {
+  id             String   @id @default(uuid())
+  clientId       String
+  invoice_number String
+  carrier_name   String
+  status         String   // e.g., "CLEAR", "DISCREPANCY"
+  total_billed   Float
+  total_savings  Float
+  timestamp      DateTime @default(now())
+  
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
