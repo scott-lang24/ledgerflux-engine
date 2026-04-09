@@ -3,13 +3,13 @@ const cors = require('cors');
 const multer = require('multer');
 const AdmZip = require('adm-zip');
 const fs = require('fs');
-const { exec } = require('child_process');
 const path = require('path');
+const { exec } = require('child_process'); // Make sure this is here!
 const { PrismaClient } = require('@prisma/client');
 
-// Initialize the Enterprise Tools
 const prisma = new PrismaClient();
 const app = express();
+// ... the rest of your code
 app.use(cors());
 app.use(express.json());
 
