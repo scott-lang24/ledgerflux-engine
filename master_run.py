@@ -27,6 +27,13 @@ st.set_page_config(
 )
 init_db()
 
+# --- ADDITION: OVERRIDE COMPANY NAME TO DEMO CLIENT ---
+conn = get_db_connection()
+conn.execute("UPDATE users SET company_name='Demo Client' WHERE username='user1'")
+conn.commit()
+conn.close()
+# ------------------------------------------------------
+
 # --- 2. PRO UI CSS (Your Original Masterpiece) ---
 pro_css = """
 <style>
@@ -84,7 +91,8 @@ def login():
                 conn.close()
                 if user:
                     st.session_state['logged_in'] = True
-                    st.session_state['user_info'] = {'user': user[0], 'company': user[2]}
+                    # Re-fetch company name just in case the update above fired
+                    st.session_state['user_info'] = {'user': user[0], 'company': "Demo Client"}
                     st.rerun()
                 else: st.error("Invalid Credentials")
 
@@ -135,8 +143,20 @@ else:
         st.title("New Audit Request")
         
         st.subheader("Audit Parameters")
-        # Modified to feed the universal OCR engine
-        carrier = st.selectbox("Select Target Carrier Contract:", ["Delhivery", "BlueDart", "Safexpress"])
+        
+        # --- ADDITION: THE DUAL-PARAMETER SELECTOR ---
+        c_param1, c_param2 = st.columns(2)
+        with c_param1:
+            carrier = st.selectbox("Carrier Contract (Vision Schema):", ["Delhivery", "BlueDart", "Safexpress"])
+        with c_param2:
+            trade_lane = st.selectbox("Trade Lane / Mode (Rule Engine):", [
+                "Auto-Detect Mode", 
+                "Surface / LTL (Road)", 
+                "Express / Air Parcel", 
+                "Cold Chain / Pharma",
+                "Heavy TEU / Ocean"
+            ])
+        # ---------------------------------------------
         
         uploaded_file = st.file_uploader("Upload Invoice(s) (PDF or .ZIP batch)", type=['pdf', 'zip'])
         
@@ -153,7 +173,7 @@ else:
                 results = []
                 with zipfile.ZipFile(uploaded_file, 'r') as z:
                     pdf_files = [f for f in z.namelist() if f.endswith('.pdf')]
-                    terminal.code(f"[LOG] Found {len(pdf_files)} invoices. Routing to {carrier} OCR Schema...", language="bash")
+                    terminal.code(f"[LOG] Found {len(pdf_files)} invoices. Routing to {carrier} ({trade_lane}) Schema...", language="bash")
                     
                     for pdf_name in pdf_files:
                         with z.open(pdf_name) as pdf_file:
@@ -192,7 +212,7 @@ else:
                 terminal.code(f"[SYS] Phase 1: Initiating {carrier} OCR Vision Engine...", language="bash")
                 inv_id, extracted_rows = extract_invoice_data(uploaded_file, carrier)
                 time.sleep(1)
-                terminal.code("[SYS] Phase 2: Cross-referencing against active MSA rate cards...", language="bash")
+                terminal.code(f"[SYS] Phase 2: Cross-referencing {trade_lane} rate cards...", language="bash")
                 
                 status, billed, savings, details = run_audit(extracted_rows, carrier)
                 log_audit(inv_id, status, billed, savings)
