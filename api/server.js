@@ -36,39 +36,30 @@ app.get('/health', async (req, res) => {
 });
 
 // 4. The Batch Processor
-app.post('/api/upload/batch', upload.single('file'), async (req, res) => {
-    try {
-        if (!req.file) return res.status(400).json({ error: "No ZIP provided" });
-
-        const zip = new AdmZip(req.file.path);
-        const extractDir = path.join(uploadDir, `batch_${Date.now()}`);
-        zip.extractAllTo(extractDir, true);
-        fs.unlinkSync(req.file.path);
-
-        const files = fs.readdirSync(extractDir).filter(f => f.toLowerCase().endsWith('.pdf'));
-        
-        // Immediate Response to Streamlit
-        res.json({ message: "Batch received", invoice_count: files.length, status: "PROCESSING" });
-
-        // Background Math
+// Background Math
         files.forEach(file => {
             const filePath = path.join(extractDir, file);
-            exec(`python3 core/analyzer.py "${filePath}"`, (err, stdout) => {
+            exec(`python3 core/analyzer.py "${filePath}"`, async (err, stdout) => {
                 if (err) return console.error(`[PY ERROR] ${err.message}`);
-                const result = JSON.parse(stdout);
-                console.log(`[AUDIT] ${result.invoice_id} | Saved: ₹${result.total_savings}`);
+                
+                try {
+                    const result = JSON.parse(stdout);
+                    console.log(`[AUDIT] ${result.invoice_id} | Saved to DB`);
+
+                    // --- THE DB INSERT (PHASE 2 POWER) ---
+                    await prisma.audit.create({
+                        data: {
+                            clientId: "OMNIACTIVE-UUID-001", // Hardcoded for demo
+                            invoice_number: result.invoice_id,
+                            carrier_name: result.carrier,
+                            status: result.status,
+                            total_billed: result.total_billed,
+                            total_savings: result.total_savings
+                        }
+                    });
+
+                } catch (parseErr) {
+                    console.error("[JSON ERROR]", stdout);
+                }
             });
         });
-    } catch (err) {
-        console.error("[FATAL] Batch failed:", err);
-        if (!res.headersSent) res.status(500).send("Server Error");
-    }
-});
-
-// 5. The Ignition (THE FIX)
-const PORT = 3000;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n======================================`);
-    console.log(`⚡ LEDGERFLUX API: http://localhost:${PORT}`);
-    console.log(`======================================\n`);
-});
