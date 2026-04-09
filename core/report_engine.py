@@ -70,6 +70,31 @@ def generate_html_report(invoice_id, carrier, status, total_billed, total_saving
             </div>
         </div>
     </body>
-    
     </html>
     """
+    return html
+
+def send_real_email(to_email, subject, body, html_content=None, filename="Audit_Report.html"):
+    if "YOUR_EMAIL" in EMAIL_SENDER:
+        return False, "⚠️ Email not configured."
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_SENDER
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain'))
+        
+        # ATTACH HTML FILE
+        if html_content:
+            part = MIMEApplication(html_content.encode('utf-8'), Name=filename)
+            part['Content-Disposition'] = f'attachment; filename="{filename}"'
+            msg.attach(part)
+            
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+        server.sendmail(EMAIL_SENDER, to_email, msg.as_string())
+        server.quit()
+        return True, "Email sent successfully!"
+    except Exception as e:
+        return False, str(e)
