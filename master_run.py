@@ -34,7 +34,7 @@ conn.commit()
 conn.close()
 # ------------------------------------------------------
 
-# --- 2. PRO UI CSS (Your Original Masterpiece) ---
+# --- 2. PRO UI CSS ---
 pro_css = """
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
@@ -91,7 +91,6 @@ def login():
                 conn.close()
                 if user:
                     st.session_state['logged_in'] = True
-                    # Re-fetch company name just in case the update above fired
                     st.session_state['user_info'] = {'user': user[0], 'company': "Demo Client"}
                     st.rerun()
                 else: st.error("Invalid Credentials")
@@ -103,7 +102,7 @@ else:
     user = st.session_state['user_info']
     company = user['company']
     
-    # --- SIDEBAR (Restored) ---
+    # --- SIDEBAR ---
     with st.sidebar:
         st.markdown("## ⚡ LedgerFlux") 
         st.caption("v6.1 Modular Enterprise Cloud")
@@ -138,13 +137,11 @@ else:
                 return 'color: #00E676; font-weight: bold;'
             st.table(df_show.style.map(color_row, subset=['status']).format({'recovered_amt': '₹ {:,.2f}'}))
 
-    # --- REQUEST NEW CHECK TAB (The Hybrid UI + Engine) ---
+    # --- REQUEST NEW CHECK TAB ---
     elif selected == "Request New Check":
         st.title("New Audit Request")
         
         st.subheader("Audit Parameters")
-        
-        # --- ADDITION: THE DUAL-PARAMETER SELECTOR ---
         c_param1, c_param2 = st.columns(2)
         with c_param1:
             carrier = st.selectbox("Carrier Contract (Vision Schema):", ["Delhivery", "BlueDart", "Safexpress"])
@@ -156,7 +153,6 @@ else:
                 "Cold Chain / Pharma",
                 "Heavy TEU / Ocean"
             ])
-        # ---------------------------------------------
         
         uploaded_file = st.file_uploader("Upload Invoice(s) (PDF or .ZIP batch)", type=['pdf', 'zip'])
         
@@ -179,7 +175,6 @@ else:
                         with z.open(pdf_name) as pdf_file:
                             pdf_bytes = BytesIO(pdf_file.read())
                             
-                            # Call the new modular engines
                             inv_id, extracted_rows = extract_invoice_data(pdf_bytes, carrier)
                             status, billed, savings, details = run_audit(extracted_rows, carrier)
                             log_audit(inv_id, status, billed, savings)
@@ -191,6 +186,7 @@ else:
                 
                 total_billed = sum(r['total'] for r in results)
                 total_savings = sum(r['savings'] for r in results)
+                batch_status = "Discrepancy" if total_savings > 0 else "Clear"
                 
                 c1, c2, c3 = st.columns(3)
                 c1.metric("Invoices Audited", len(results))
@@ -206,7 +202,30 @@ else:
                 def color_status(val):
                     return 'color: #FF5252; font-weight: bold;' if val == 'Discrepancy' else 'color: #00E676; font-weight: bold;'
                 st.dataframe(batch_df.style.map(color_status, subset=['Status']), use_container_width=True)
+
+                # --- ADDITION: BATCH EXPORT AND EMAIL ROUTING ---
+                st.markdown("---")
+                st.subheader("Batch Export & Distribution")
                 
+                batch_id = f"BATCH-{datetime.datetime.now().strftime('%M%S')}"
+                html_report = generate_html_report(batch_id, f"{carrier} (Batch Summary)", batch_status, total_billed, total_savings, batch_df)
+                
+                c4, c5 = st.columns(2)
+                with c4:
+                    st.download_button("⬇️ Download Master Batch HTML Certificate", data=html_report, file_name=f"Batch_Audit_{batch_id}.html", mime="text/html")
+                with c5:
+                    email = st.text_input("Send Master Batch Report To:")
+                    if st.button("Send Batch via Secure Mail") and email:
+                        if lottie_email: st_lottie(lottie_email, height=100, key="batch_mail_anim")
+                        ok, msg = send_real_email(
+                            email, f"LedgerFlux Master Batch Audit: {batch_id}", 
+                            "Please find the attached formal Master Batch Audit Certificate.", 
+                            html_content=html_report, filename=f"Batch_Audit_{batch_id}.html"
+                        )
+                        if ok: st.success("Batch Report Sent Successfully!")
+                        else: st.error(msg)
+                # ------------------------------------------------
+
             # --- SINGLE PDF LOGIC ---
             else:
                 terminal.code(f"[SYS] Phase 1: Initiating {carrier} OCR Vision Engine...", language="bash")
@@ -220,7 +239,6 @@ else:
                 time.sleep(1)
                 terminal.empty() 
                 
-                # Save to session state so UI can render it
                 st.session_state['result'] = {
                     "id": inv_id, "carrier": carrier, "status": status, 
                     "billed": billed, "savings": savings, "details": details
@@ -231,13 +249,11 @@ else:
             res = st.session_state['result']
             st.success(f"Analysis Complete: {res['carrier']} Invoice {res['id']}")
             
-            # Overview Metrics
             c1, c2, c3 = st.columns(3)
             c1.metric("Total Billed", f"₹ {res['billed']:,.2f}")
             c2.metric("Identified Overcharge", f"₹ {res['savings']:,.2f}")
             c3.metric("Status", res['status'])
             
-            # Line Item Table
             st.subheader("Line Item Breakdown")
             df_det = pd.DataFrame(res['details'])
             def highlight_error(row):
@@ -245,14 +261,13 @@ else:
                 return [''] * len(row)
             st.table(df_det.style.apply(highlight_error, axis=1).format({"Billed": "₹ {:.2f}", "Expected": "₹ {:.2f}"}))
             
-            # Dispute Builder
             if res['status'] == "Discrepancy":
                 st.subheader("Auto-Generated Legal Dispute")
                 draft = generate_dispute_draft(res['id'], res['carrier'], res['details'])
                 st.text_area("Copy and send to carrier billing:", value=draft, height=200)
 
-            # HTML & Email Routing
             st.markdown("---")
+            st.subheader("Export & Distribution")
             html_report = generate_html_report(res['id'], res['carrier'], res['status'], res['billed'], res['savings'], df_det)
             
             c4, c5 = st.columns(2)
@@ -261,7 +276,7 @@ else:
             with c5:
                 email = st.text_input("Email Report To:")
                 if st.button("Send via Secure Mail") and email:
-                    if lottie_email: st_lottie(lottie_email, height=100, key="mail_anim")
+                    if lottie_email: st_lottie(lottie_email, height=100, key="single_mail_anim")
                     ok, msg = send_real_email(
                         email, f"Audit Certificate: {res['id']}", 
                         "Please find the attached formal audit certificate.", 
@@ -270,7 +285,7 @@ else:
                     if ok: st.success("Report Sent Successfully!")
                     else: st.error(msg)
 
-    # --- ANALYTICS TAB (Restored) ---
+    # --- ANALYTICS TAB ---
     elif selected == "Analytics":
         st.title("Financial Intelligence")
         data = get_client_stats()
@@ -287,7 +302,7 @@ else:
         else:
             st.info("No data available yet. Run an audit to generate analytics.")
 
-    # --- SETTINGS TAB (Restored) ---
+    # --- SETTINGS TAB ---
     elif selected == "Settings":
         st.title("Settings")
         st.text_input("User ID", value="user1", disabled=True)
