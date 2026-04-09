@@ -36,7 +36,21 @@ app.get('/health', async (req, res) => {
 });
 
 // 4. The Batch Processor
-// Background Math
+app.post('/api/upload/batch', upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: "No ZIP provided" });
+
+        const zip = new AdmZip(req.file.path);
+        const extractDir = path.join(uploadDir, `batch_${Date.now()}`);
+        zip.extractAllTo(extractDir, true);
+        fs.unlinkSync(req.file.path);
+
+        const files = fs.readdirSync(extractDir).filter(f => f.toLowerCase().endsWith('.pdf'));
+        
+        // Immediate Response to Streamlit so the UI stays snappy
+        res.json({ message: "Batch received", invoice_count: files.length, status: "PROCESSING" });
+
+        // Background Math - This is where the Python Specialist works
         files.forEach(file => {
             const filePath = path.join(extractDir, file);
             exec(`python3 core/analyzer.py "${filePath}"`, async (err, stdout) => {
@@ -44,12 +58,12 @@ app.get('/health', async (req, res) => {
                 
                 try {
                     const result = JSON.parse(stdout);
-                    console.log(`[AUDIT] ${result.invoice_id} | Saved to DB`);
+                    console.log(`[AUDIT] ${result.invoice_id} | Saving to DB...`);
 
-                    // --- THE DB INSERT (PHASE 2 POWER) ---
+                    // Save result to Supabase via Prisma
                     await prisma.audit.create({
                         data: {
-                            clientId: "OMNIACTIVE-UUID-001", // Hardcoded for demo
+                            clientId: "OMNIACTIVE-UUID-001", 
                             invoice_number: result.invoice_id,
                             carrier_name: result.carrier,
                             status: result.status,
@@ -57,22 +71,36 @@ app.get('/health', async (req, res) => {
                             total_savings: result.total_savings
                         }
                     });
+                    console.log(`[DB SUCCESS] ${result.invoice_id} secured.`);
 
                 } catch (parseErr) {
-                    console.error("[JSON ERROR]", stdout);
+                    console.error("[JSON ERROR] Python output was invalid:", stdout);
                 }
             });
         });
+    } catch (err) {
+        console.error("[FATAL] Batch failed:", err);
+        if (!res.headersSent) res.status(500).send("Server Error");
+    }
+});
 
-        // --- GET AUDIT SUMMARY FOR DASHBOARD ---
+// 5. Get Audit Summary (For the Streamlit Dashboard)
 app.get('/api/audits/summary', async (req, res) => {
     try {
         const audits = await prisma.audit.findMany({
             orderBy: { timestamp: 'desc' },
-            take: 20 // Only show the latest 20 for speed
+            take: 20 
         });
         res.json(audits);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
+});
+
+// 6. Ignition
+const PORT = 3000;
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n======================================`);
+    console.log(`⚡ LEDGERFLUX API: http://localhost:${PORT}`);
+    console.log(`======================================\n`);
 });
