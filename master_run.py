@@ -123,11 +123,16 @@ lottie_scanning = load_lottie_url("https://assets10.lottiefiles.com/packages/lf2
 lottie_email = load_lottie_url("https://assets5.lottiefiles.com/packages/lf20_swoi6t8m.json")
 
 def get_client_stats():
-    conn = get_db_connection()
-    try: df = pd.read_sql_query("SELECT * FROM audits ORDER BY timestamp DESC", conn)
-    except: df = pd.DataFrame()
-    conn.close()
-    return df
+    try:
+        # Instead of reading a local DB, we ask our Enterprise API for the data
+        # We'll build this endpoint in the next step
+        response = requests.get("http://localhost:3000/api/audits/summary")
+        if response.status_code == 200:
+            return pd.DataFrame(response.json())
+        else:
+            return pd.DataFrame()
+    except:
+        return pd.DataFrame()
 
 # --- 4. MAIN APP & LOGIN FLOW ---
 if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
