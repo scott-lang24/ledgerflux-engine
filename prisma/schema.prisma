@@ -8,9 +8,7 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// ... keep all your Client, User, CarrierContract models below exactly as they were!
-
-e Tenancy Foundation
+// 1. The Tenancy Foundation
 model Client {
   id               String            @id @default(uuid())
   company_name     String
@@ -28,7 +26,7 @@ model User {
   clientId      String
   email         String   @unique
   password_hash String
-  role          String   @default("VIEWER") // 'ADMIN', 'UPLOADER', 'VIEWER'
+  role          String   @default("VIEWER")
   
   client        Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 }
@@ -37,8 +35,8 @@ model User {
 model CarrierContract {
   id             String   @id @default(uuid())
   clientId       String
-  carrier_name   String   // e.g., "Delhivery"
-  trade_lane     String   // e.g., "Express Air"
+  carrier_name   String   
+  trade_lane     String   
   valid_from     DateTime
   valid_to       DateTime?
   
@@ -50,9 +48,9 @@ model CarrierContract {
 model RateLineItem {
   id               String   @id @default(uuid())
   contractId       String
-  charge_type      String   // e.g., "Base Freight", "Fuel Surcharge"
+  charge_type      String   
   rate_value       Float
-  calculation_type String   // e.g., "PER_KG", "PERCENTAGE", "FLAT"
+  calculation_type String   
   
   contract         CarrierContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
 }
@@ -63,7 +61,7 @@ model Audit {
   clientId       String
   invoice_number String
   carrier_name   String
-  status         String   // e.g., "CLEAR", "DISCREPANCY"
+  status         String   
   total_billed   Float
   total_savings  Float
   timestamp      DateTime @default(now())
