@@ -21,60 +21,54 @@ if (!fs.existsSync(uploadDir)) {
 const upload = multer({ dest: uploadDir });
 
 // --- THE BATCH ZIP UPLOAD ENDPOINT ---
+// --- THE BATCH ZIP UPLOAD ENDPOINT (UPGRADED WITH PYTHON WORKER) ---
 app.post('/api/upload/batch', upload.single('file'), async (req, res) => {
     try {
-        if (!req.file) {
-            return res.status(400).json({ error: "No ZIP file provided." });
-        }
+        if (!req.file) return res.status(400).json({ error: "No ZIP file provided." });
 
-        // 1. Unpack the ZIP
-        console.log(`[SYS] Receiving Batch ZIP: ${req.file.originalname}`);
+        console.log(`\n[SYS] Unpacking Batch: ${req.file.originalname}`);
         const zip = new AdmZip(req.file.path);
-        const zipEntries = zip.getEntries();
-        
-        // 2. Filter for PDFs only
-        const pdfFiles = zipEntries.filter(entry => entry.entryName.toLowerCase().endsWith('.pdf'));
-        console.log(`[LOG] Extracted ${pdfFiles.length} invoices for processing.`);
+        const extractDir = path.join(uploadDir, `batch_${Date.now()}`);
+        zip.extractAllTo(extractDir, true);
+        fs.unlinkSync(req.file.path); // Delete the raw zip
 
-        // 3. (Mock) Grab the Client ID from the request header 
-        // In production, this comes from their JWT login token
-        const clientId = req.headers['x-client-id'] || "PENDING-CLIENT-UUID";
+        const files = fs.readdirSync(extractDir).filter(f => f.toLowerCase().endsWith('.pdf'));
+        console.log(`[LOG] Found ${files.length} PDFs. Firing Python Engine...`);
 
-        // 4. Clean up the raw ZIP file to save server space
-        fs.unlinkSync(req.file.path);
-
-        // 5. Return the payload to the frontend so it can trigger the Python Engine
-        return res.status(200).json({
-            message: "Batch received and unpacked successfully.",
-            invoice_count: pdfFiles.length,
-            status: "QUEUED_FOR_AUDIT"
+        // Send success to frontend immediately so browser doesn't freeze
+        res.status(200).json({
+            message: "Batch secured. Processing in background.",
+            invoice_count: files.length,
+            status: "PROCESSING"
         });
+
+        // --- BACKGROUND WORKER QUEUE ---
+        // (This runs silently after telling the frontend everything is okay)
+        for (const file of files) {
+            const filePath = path.join(extractDir, file);
+            
+            // Fire the Python Specialist
+            exec(`python core/analyzer.py "${filePath}"`, async (error, stdout, stderr) => {
+                if (error) {
+                    console.error(`[PYTHON ERROR] ${error.message}`);
+                    return;
+                }
+                
+                try {
+                    // Parse what Python spit out
+                    const result = JSON.parse(stdout);
+                    console.log(`[AUDIT COMPLETE] ${result.invoice_id} | Savings: ₹${result.total_savings}`);
+                    
+                    // Note: In Phase 3, we will insert 'result' into Supabase here!
+                    
+                } catch (parseErr) {
+                    console.error("[JSON PARSE ERROR] Python output was not valid JSON:", stdout);
+                }
+            });
+        }
 
     } catch (error) {
         console.error("[ERROR] Batch Processing Failed:", error);
-        return res.status(500).json({ error: "Failed to process ZIP archive." });
+        if (!res.headersSent) res.status(500).json({ error: "Failed to process ZIP archive." });
     }
-});
-// --- ROOT ENDPOINT ---
-app.get('/', (req, res) => {
-    res.status(200).send("LedgerFlux Enterprise API V1 is Online.");
-});
-// --- HEALTH CHECK ENDPOINT ---
-app.get('/health', async (req, res) => {
-    try {
-        // Ping Supabase to ensure connection is alive
-        await prisma.$queryRaw`SELECT 1`;
-        res.status(200).json({ status: "LedgerFlux API & Database Online ⚡" });
-    } catch (e) {
-        res.status(500).json({ status: "Database Connection Failed" });
-    }
-});
-
-// --- IGNITION ---
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`\n======================================`);
-    console.log(`⚡ LEDGERFLUX ENTERPRISE API RUNNING`);
-    console.log(`🚀 Port: ${PORT}`);
-    console.log(`======================================\n`);
 });
