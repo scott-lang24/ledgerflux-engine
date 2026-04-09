@@ -219,54 +219,43 @@ else:
             if lottie_scanning: st_lottie(lottie_scanning, height=200, key="scan")
             terminal = st.empty()
             
-            # --- BATCH ZIP PROCESSING ---
+            # --- BATCH ZIP LOGIC (ROUTED TO ENTERPRISE API) ---
             if uploaded_file.name.endswith('.zip'):
-                terminal.code("[SYS] ZIP Archive detected. Unpacking batch...", language="bash")
+                terminal.code("[SYS] Packaging payload... routing to Enterprise API (Port 3000).", language="bash")
                 time.sleep(1)
                 
-                results = []
-                with zipfile.ZipFile(uploaded_file, 'r') as z:
-                    pdf_files = [f for f in z.namelist() if f.endswith('.pdf')]
-                    terminal.code(f"[LOG] Found {len(pdf_files)} invoices. Routing to {carrier} ({trade_lane}) Schema...", language="bash")
+                try:
+                    # 1. Prepare the file for transit over HTTP
+                    files = {'file': (uploaded_file.name, uploaded_file.getvalue(), 'application/zip')}
+                    headers = {'x-client-id': 'OMNIACTIVE-UUID-001'} # Hardcoded for demo
                     
-                    for pdf_name in pdf_files:
-                        with z.open(pdf_name) as pdf_file:
-                            pdf_bytes = BytesIO(pdf_file.read())
-                            inv_id, extracted_rows = extract_invoice_data(pdf_bytes, carrier)
-                            if not extracted_rows:
-                                status, billed, savings, details = generate_demo_data(pdf_bytes, trade_lane)
-                            else:
-                                status, billed, savings, details = run_audit(extracted_rows, carrier)
-                            
-                            log_audit(inv_id, status, billed, savings)
-                            results.append({"id": inv_id, "mode": carrier, "status": status, "total": billed, "savings": savings})
-                
-                terminal.empty()
-                
-                # Calculations for the batch
-                total_billed = sum(r['total'] for r in results)
-                total_savings = sum(r['savings'] for r in results)
-                batch_status = "Discrepancy" if total_savings > 0 else "Clear"
-                batch_id = f"BATCH-{datetime.datetime.now().strftime('%M%S')}"
-                
-                batch_df = pd.DataFrame([{
-                    "Invoice ID": r['id'], "Carrier": r['mode'], "Status": r['status'], 
-                    "Billed": f"₹ {r['total']:,.2f}", "Recoverable": f"₹ {r['savings']:,.2f}"
-                } for r in results])
-                
-                html_report = generate_html_report(batch_id, f"{carrier} (Batch Summary)", batch_status, total_billed, total_savings, batch_df)
-                
-                # --- SAVE BATCH TO PERSISTENT MEMORY ---
-                st.session_state['batch_result'] = {
-                    "results": results,
-                    "total_billed": total_billed,
-                    "total_savings": total_savings,
-                    "batch_df": batch_df,
-                    "batch_id": batch_id,
-                    "html_report": html_report
-                }
+                    # 2. Fire the payload to the Node.js Server
+                    response = requests.post("http://localhost:3000/api/upload/batch", files=files, headers=headers)
+                    
+                    # 3. Handle the Server Response
+                    if response.status_code == 200:
+                        api_data = response.json()
+                        terminal.empty()
+                        
+                        # Display the Enterprise Handoff Success
+                        st.success("Handoff Complete: Payload secured by LedgerFlux API.")
+                        
+                        c1, c2, c3 = st.columns(3)
+                        c1.metric("API Status", "200 OK")
+                        c2.metric("Invoices Unpacked", api_data['invoice_count'])
+                        c3.metric("Queue Status", api_data['status'].replace('_', ' '))
+                        
+                        st.info("ℹ️ The batch has been offloaded to the background worker queue. You can safely close this window or run another audit without crashing the browser. Results will populate in the Analytics tab once processing is complete.")
+                        
+                    else:
+                        terminal.code(f"[ERROR] API Rejected Payload: {response.status_code}", language="bash")
+                        st.error("Enterprise API rejected the file. Check server logs.")
+                        
+                except Exception as e:
+                    terminal.code(f"[FATAL] Connection Refused. Is the Node.js server running on Port 3000?\nSystem Error: {e}", language="bash")
+                    st.error("Backend offline. Make sure the API server is running.")
 
-            # --- SINGLE PDF PROCESSING ---
+            # --- SINGLE PDF PROCESSING (REMAINS LOCAL FOR QUICK TESTS) ---
             else:
                 terminal.code(f"[SYS] Phase 1: Initiating {carrier} OCR Vision Engine...", language="bash")
                 file_bytes = BytesIO(uploaded_file.getvalue())
@@ -291,41 +280,8 @@ else:
                     "billed": billed, "savings": savings, "details": details
                 }
 
-        # --- PERSISTENT DISPLAY FOR BATCH ZIP ---
-        if 'batch_result' in st.session_state and uploaded_file and uploaded_file.name.endswith('.zip'):
-            bres = st.session_state['batch_result']
-            st.success(f"Batch Analysis Complete: Processed {len(bres['results'])} Invoices")
-            
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Invoices Audited", len(bres['results']))
-            c2.metric("Total Invoiced", f"₹ {bres['total_billed']:,.2f}")
-            c3.metric("Total Recoverable", f"₹ {bres['total_savings']:,.2f}")
-            
-            st.subheader("Batch Breakdown")
-            def color_status(val):
-                return 'color: #FF5252; font-weight: bold;' if val == 'Discrepancy' else 'color: #00E676; font-weight: bold;'
-            st.dataframe(bres['batch_df'].style.map(color_status, subset=['Status']), use_container_width=True)
-
-            st.markdown("---")
-            st.subheader("Batch Export & Distribution")
-            
-            c4, c5 = st.columns(2)
-            with c4:
-                st.download_button("⬇️ Download Master Batch HTML Certificate", data=bres['html_report'], file_name=f"Batch_Audit_{bres['batch_id']}.html", mime="text/html")
-            with c5:
-                email = st.text_input("Send Master Batch Report To:")
-                if st.button("Send Batch via Secure Mail") and email:
-                    if lottie_email: st_lottie(lottie_email, height=100, key="batch_mail_anim")
-                    ok, msg = send_real_email(
-                        email, f"LedgerFlux Master Batch Audit: {bres['batch_id']}", 
-                        "Please find the attached formal Master Batch Audit Certificate.", 
-                        html_content=bres['html_report'], filename=f"Batch_Audit_{bres['batch_id']}.html"
-                    )
-                    if ok: st.success("Batch Report Sent Successfully!")
-                    else: st.error(msg)
-
         # --- PERSISTENT DISPLAY FOR SINGLE PDF ---
-        elif 'result' in st.session_state and st.session_state['result'] and uploaded_file and not uploaded_file.name.endswith('.zip'):
+        if 'result' in st.session_state and st.session_state['result'] and uploaded_file and not uploaded_file.name.endswith('.zip'):
             res = st.session_state['result']
             st.success(f"Analysis Complete: {res['carrier']} Invoice {res['id']}")
             
