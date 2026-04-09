@@ -3,6 +3,7 @@
     "lucide-react": "^1.7.0"
   },
   "devDependencies": {
+    "dotenv": "^17.4.1",
     "prisma": "^7.7.0"
   }
 }
