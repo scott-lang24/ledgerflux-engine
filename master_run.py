@@ -52,7 +52,6 @@ SCAM_DATABASE = {
 }
 
 def generate_demo_data(file_bytes, trade_lane):
-    """The 1000IQ Fallback Engine. Guarantees a hit if true OCR fails."""
     text = ""
     try:
         with pdfplumber.open(file_bytes) as pdf:
@@ -215,12 +214,12 @@ else:
         
         uploaded_file = st.file_uploader("Upload Invoice(s) (PDF or .ZIP batch)", type=['pdf', 'zip'])
         
+        # --- THE AUDIT TRIGGER ---
         if st.button("RUN DEEP AUDIT") and uploaded_file:
             if lottie_scanning: st_lottie(lottie_scanning, height=200, key="scan")
-            
             terminal = st.empty()
             
-            # --- BATCH ZIP LOGIC ---
+            # --- BATCH ZIP PROCESSING ---
             if uploaded_file.name.endswith('.zip'):
                 terminal.code("[SYS] ZIP Archive detected. Unpacking batch...", language="bash")
                 time.sleep(1)
@@ -233,9 +232,7 @@ else:
                     for pdf_name in pdf_files:
                         with z.open(pdf_name) as pdf_file:
                             pdf_bytes = BytesIO(pdf_file.read())
-                            
                             inv_id, extracted_rows = extract_invoice_data(pdf_bytes, carrier)
-                            # HYBRID LOGIC INJECTION
                             if not extracted_rows:
                                 status, billed, savings, details = generate_demo_data(pdf_bytes, trade_lane)
                             else:
@@ -245,55 +242,37 @@ else:
                             results.append({"id": inv_id, "mode": carrier, "status": status, "total": billed, "savings": savings})
                 
                 terminal.empty()
-                st.success(f"Batch Analysis Complete: Processed {len(results)} Invoices")
                 
+                # Calculations for the batch
                 total_billed = sum(r['total'] for r in results)
                 total_savings = sum(r['savings'] for r in results)
                 batch_status = "Discrepancy" if total_savings > 0 else "Clear"
+                batch_id = f"BATCH-{datetime.datetime.now().strftime('%M%S')}"
                 
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Invoices Audited", len(results))
-                c2.metric("Total Invoiced", f"₹ {total_billed:,.2f}")
-                c3.metric("Total Recoverable", f"₹ {total_savings:,.2f}")
-                
-                st.subheader("Batch Breakdown")
                 batch_df = pd.DataFrame([{
                     "Invoice ID": r['id'], "Carrier": r['mode'], "Status": r['status'], 
                     "Billed": f"₹ {r['total']:,.2f}", "Recoverable": f"₹ {r['savings']:,.2f}"
                 } for r in results])
                 
-                def color_status(val):
-                    return 'color: #FF5252; font-weight: bold;' if val == 'Discrepancy' else 'color: #00E676; font-weight: bold;'
-                st.dataframe(batch_df.style.map(color_status, subset=['Status']), use_container_width=True)
-
-                st.markdown("---")
-                st.subheader("Batch Export & Distribution")
-                batch_id = f"BATCH-{datetime.datetime.now().strftime('%M%S')}"
                 html_report = generate_html_report(batch_id, f"{carrier} (Batch Summary)", batch_status, total_billed, total_savings, batch_df)
                 
-                c4, c5 = st.columns(2)
-                with c4:
-                    st.download_button("⬇️ Download Master Batch HTML Certificate", data=html_report, file_name=f"Batch_Audit_{batch_id}.html", mime="text/html")
-                with c5:
-                    email = st.text_input("Send Master Batch Report To:")
-                    if st.button("Send Batch via Secure Mail") and email:
-                        if lottie_email: st_lottie(lottie_email, height=100, key="batch_mail_anim")
-                        ok, msg = send_real_email(
-                            email, f"LedgerFlux Master Batch Audit: {batch_id}", 
-                            "Please find the attached formal Master Batch Audit Certificate.", 
-                            html_content=html_report, filename=f"Batch_Audit_{batch_id}.html"
-                        )
-                        if ok: st.success("Batch Report Sent Successfully!")
-                        else: st.error(msg)
+                # --- SAVE BATCH TO PERSISTENT MEMORY ---
+                st.session_state['batch_result'] = {
+                    "results": results,
+                    "total_billed": total_billed,
+                    "total_savings": total_savings,
+                    "batch_df": batch_df,
+                    "batch_id": batch_id,
+                    "html_report": html_report
+                }
 
-            # --- SINGLE PDF LOGIC ---
+            # --- SINGLE PDF PROCESSING ---
             else:
                 terminal.code(f"[SYS] Phase 1: Initiating {carrier} OCR Vision Engine...", language="bash")
                 file_bytes = BytesIO(uploaded_file.getvalue())
                 inv_id, extracted_rows = extract_invoice_data(file_bytes, carrier)
                 time.sleep(1)
                 
-                # HYBRID LOGIC INJECTION
                 if not extracted_rows:
                     terminal.code(f"[WARN] Strict Table Match Failed. Pivot to Deep Contextual Analysis...", language="bash")
                     time.sleep(1)
@@ -304,17 +283,49 @@ else:
                     status, billed, savings, details = run_audit(extracted_rows, carrier)
                 
                 log_audit(inv_id, status, billed, savings)
-                
-                time.sleep(1)
                 terminal.empty() 
                 
+                # --- SAVE SINGLE PDF TO PERSISTENT MEMORY ---
                 st.session_state['result'] = {
                     "id": inv_id, "carrier": carrier, "status": status, 
                     "billed": billed, "savings": savings, "details": details
                 }
 
-        # Display single result actions
-        if 'result' in st.session_state and st.session_state['result'] and not (uploaded_file and uploaded_file.name.endswith('.zip')):
+        # --- PERSISTENT DISPLAY FOR BATCH ZIP ---
+        if 'batch_result' in st.session_state and uploaded_file and uploaded_file.name.endswith('.zip'):
+            bres = st.session_state['batch_result']
+            st.success(f"Batch Analysis Complete: Processed {len(bres['results'])} Invoices")
+            
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Invoices Audited", len(bres['results']))
+            c2.metric("Total Invoiced", f"₹ {bres['total_billed']:,.2f}")
+            c3.metric("Total Recoverable", f"₹ {bres['total_savings']:,.2f}")
+            
+            st.subheader("Batch Breakdown")
+            def color_status(val):
+                return 'color: #FF5252; font-weight: bold;' if val == 'Discrepancy' else 'color: #00E676; font-weight: bold;'
+            st.dataframe(bres['batch_df'].style.map(color_status, subset=['Status']), use_container_width=True)
+
+            st.markdown("---")
+            st.subheader("Batch Export & Distribution")
+            
+            c4, c5 = st.columns(2)
+            with c4:
+                st.download_button("⬇️ Download Master Batch HTML Certificate", data=bres['html_report'], file_name=f"Batch_Audit_{bres['batch_id']}.html", mime="text/html")
+            with c5:
+                email = st.text_input("Send Master Batch Report To:")
+                if st.button("Send Batch via Secure Mail") and email:
+                    if lottie_email: st_lottie(lottie_email, height=100, key="batch_mail_anim")
+                    ok, msg = send_real_email(
+                        email, f"LedgerFlux Master Batch Audit: {bres['batch_id']}", 
+                        "Please find the attached formal Master Batch Audit Certificate.", 
+                        html_content=bres['html_report'], filename=f"Batch_Audit_{bres['batch_id']}.html"
+                    )
+                    if ok: st.success("Batch Report Sent Successfully!")
+                    else: st.error(msg)
+
+        # --- PERSISTENT DISPLAY FOR SINGLE PDF ---
+        elif 'result' in st.session_state and st.session_state['result'] and uploaded_file and not uploaded_file.name.endswith('.zip'):
             res = st.session_state['result']
             st.success(f"Analysis Complete: {res['carrier']} Invoice {res['id']}")
             
