@@ -63,3 +63,16 @@ app.get('/health', async (req, res) => {
                 }
             });
         });
+
+        // --- GET AUDIT SUMMARY FOR DASHBOARD ---
+app.get('/api/audits/summary', async (req, res) => {
+    try {
+        const audits = await prisma.audit.findMany({
+            orderBy: { timestamp: 'desc' },
+            take: 20 // Only show the latest 20 for speed
+        });
+        res.json(audits);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
