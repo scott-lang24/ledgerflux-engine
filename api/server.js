@@ -54,7 +54,10 @@ app.post('/api/upload/batch', upload.single('file'), async (req, res) => {
         return res.status(500).json({ error: "Failed to process ZIP archive." });
     }
 });
-
+// --- ROOT ENDPOINT ---
+app.get('/', (req, res) => {
+    res.status(200).send("LedgerFlux Enterprise API V1 is Online.");
+});
 // --- HEALTH CHECK ENDPOINT ---
 app.get('/health', async (req, res) => {
     try {
