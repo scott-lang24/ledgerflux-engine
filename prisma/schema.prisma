@@ -3,9 +3,10 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-}
-// 1. The Tenancy Foundation
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}e Tenancy Foundation
 model Client {
   id               String            @id @default(uuid())
   company_name     String
