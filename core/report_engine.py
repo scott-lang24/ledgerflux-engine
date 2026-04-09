@@ -1,11 +1,11 @@
 import smtplib
-import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
+import datetime
 import streamlit as st
 
-# Pulling your exact original email configuration
+# --- SECURE EMAIL CONFIG ---
 try:
     EMAIL_SENDER = st.secrets["EMAIL_SENDER"]
     EMAIL_PASSWORD = st.secrets["EMAIL_PASSWORD"]
@@ -13,7 +13,7 @@ except:
     EMAIL_SENDER = "audit.ledgerflux@gmail.com"
     EMAIL_PASSWORD = "otyf wtfh jwhw kywf"
 
-def generate_html_report(invoice_id, status, total_billed, total_savings, details_df):
+def generate_html_report(invoice_id, carrier, status, total_billed, total_savings, details_df):
     html = f"""
     <html>
     <head>
@@ -32,10 +32,15 @@ def generate_html_report(invoice_id, status, total_billed, total_savings, detail
             td {{ padding: 12px; border-bottom: 1px solid #eee; font-size: 14px; color: #444; }}
             tr:last-child td {{ border-bottom: none; }}
             .footer {{ margin-top: 50px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #aaa; text-align: center; }}
+            .print-btn {{ background-color: #333; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-bottom: 20px; cursor: pointer; }}
+            @media print {{ .print-btn {{ display: none; }} body {{ background-color: white; padding: 0; }} .container {{ box-shadow: none; border: none; }} }}
         </style>
     </head>
     <body>
         <div class="container">
+            <div style="text-align: right;">
+                <a onclick="window.print()" class="print-btn">🖨️ Save as PDF</a>
+            </div>
             <div class="header">
                 <div class="logo">⚡ LedgerFlux</div>
                 <div class="status-box">{status.upper()}</div>
@@ -56,7 +61,7 @@ def generate_html_report(invoice_id, status, total_billed, total_savings, detail
                 </div>
             </div>
 
-            <h3 style="margin-bottom: 15px; font-size: 16px;">Line Item Breakdown</h3>
+            <h3 style="margin-bottom: 15px; font-size: 16px;">Line Item Breakdown ({carrier})</h3>
             {details_df.to_html(index=False, border=0)}
 
             <div class="footer">
@@ -67,26 +72,3 @@ def generate_html_report(invoice_id, status, total_billed, total_savings, detail
     </body>
     </html>
     """
-    return html
-
-def send_real_email(to_email, subject, body, html_content=None, filename="Audit_Report.html"):
-    try:
-        msg = MIMEMultipart()
-        msg['From'] = EMAIL_SENDER
-        msg['To'] = to_email
-        msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'plain'))
-        
-        if html_content:
-            part = MIMEApplication(html_content.encode('utf-8'), Name=filename)
-            part['Content-Disposition'] = f'attachment; filename="{filename}"'
-            msg.attach(part)
-            
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(EMAIL_SENDER, EMAIL_PASSWORD)
-        server.sendmail(EMAIL_SENDER, to_email, msg.as_string())
-        server.quit()
-        return True, "Email sent successfully!"
-    except Exception as e:
-        return False, str(e)
