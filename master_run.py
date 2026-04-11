@@ -180,11 +180,13 @@ else:
         st.markdown("<br>"*8, unsafe_allow_html=True)
         if st.button("Log Out"): st.session_state['logged_in'] = False; st.rerun()
 
-    # --- DASHBOARD TAB ---
+   # --- DASHBOARD TAB ---
     if selected == "Dashboard":
         st.title(f"Hello, {company} 👋")
         data = get_client_stats()
-        total_rec = data['recovered_amt'].sum() if not data.empty and 'recovered_amt' in data else 0
+        
+        # CHANGED: 'recovered_amt' to 'total_savings'
+        total_rec = data['total_savings'].sum() if not data.empty and 'total_savings' in data else 0
         
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Total Audits", len(data))
@@ -194,11 +196,12 @@ else:
         
         st.subheader("Audit Log")
         if not data.empty:
-            df_show = data[['timestamp', 'status', 'recovered_amt']].copy()
+            # CHANGED: 'recovered_amt' to 'total_savings'
+            df_show = data[['timestamp', 'status', 'total_savings']].copy()
             def color_row(val):
                 if 'Discrepancy' in str(val): return 'color: #FF5252; font-weight: bold;'
                 return 'color: #00E676; font-weight: bold;'
-            st.table(df_show.style.map(color_row, subset=['status']).format({'recovered_amt': '₹ {:,.2f}'}))
+            st.table(df_show.style.map(color_row, subset=['status']).format({'total_savings': '₹ {:,.2f}'}))
 
     # --- REQUEST NEW CHECK TAB ---
     elif selected == "Request New Check":
