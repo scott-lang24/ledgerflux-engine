@@ -340,7 +340,8 @@ else:
                 fig_pie.update_layout(paper_bgcolor="rgba(0,0,0,0)", font_color="#E0E0E0")
                 st.plotly_chart(fig_pie, use_container_width=True)
             with c2:
-                fig_bar = px.bar(data, x='timestamp', y='recovered_amt', color_discrete_sequence=['#6C5DD3'])
+                # CHANGED: y='recovered_amt' to y='total_savings'
+                fig_bar = px.bar(data, x='timestamp', y='total_savings', color_discrete_sequence=['#6C5DD3'])
                 fig_bar.update_layout(plot_bgcolor="#121212", paper_bgcolor="rgba(0,0,0,0)", font_color="#E0E0E0", xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#333'))
                 st.plotly_chart(fig_bar, use_container_width=True)
         else:
