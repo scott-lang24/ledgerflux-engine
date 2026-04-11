@@ -124,8 +124,6 @@ lottie_email = load_lottie_url("https://assets5.lottiefiles.com/packages/lf20_sw
 
 def get_client_stats():
     try:
-        # Instead of reading a local DB, we ask our Enterprise API for the data
-        # We'll build this endpoint in the next step
         response = requests.get("http://localhost:3000/api/audits/summary")
         if response.status_code == 200:
             return pd.DataFrame(response.json())
@@ -180,12 +178,11 @@ else:
         st.markdown("<br>"*8, unsafe_allow_html=True)
         if st.button("Log Out"): st.session_state['logged_in'] = False; st.rerun()
 
-   # --- DASHBOARD TAB ---
+    # --- DASHBOARD TAB ---
     if selected == "Dashboard":
         st.title(f"Hello, {company} 👋")
         data = get_client_stats()
         
-        # CHANGED: 'recovered_amt' to 'total_savings'
         total_rec = data['total_savings'].sum() if not data.empty and 'total_savings' in data else 0
         
         c1, c2, c3, c4 = st.columns(4)
@@ -196,7 +193,6 @@ else:
         
         st.subheader("Audit Log")
         if not data.empty:
-            # CHANGED: 'recovered_amt' to 'total_savings'
             df_show = data[['timestamp', 'status', 'total_savings']].copy()
             def color_row(val):
                 if 'Discrepancy' in str(val): return 'color: #FF5252; font-weight: bold;'
@@ -233,35 +229,48 @@ else:
                 time.sleep(1)
                 
                 try:
-                    # 1. Prepare the file for transit over HTTP
                     files = {'file': (uploaded_file.name, uploaded_file.getvalue(), 'application/zip')}
-                    headers = {'x-client-id': 'OMNIACTIVE-UUID-001'} # Hardcoded for demo
                     
-                    # 2. Fire the payload to the Node.js Server
-                    response = requests.post("http://localhost:3000/api/upload/batch", files=files, headers=headers)
+                    with st.spinner("Enterprise Engine Processing Batch..."):
+                        response = requests.post("http://localhost:3000/api/upload/batch", files=files)
                     
-                    # 3. Handle the Server Response
                     if response.status_code == 200:
                         api_data = response.json()
                         terminal.empty()
-                        
-                        # Display the Enterprise Handoff Success
-                        st.success("Handoff Complete: Payload secured by LedgerFlux API.")
+                        st.success("Handoff Complete: Supabase Database Synced.")
                         
                         c1, c2, c3 = st.columns(3)
                         c1.metric("API Status", "200 OK")
-                        c2.metric("Invoices Unpacked", api_data['invoice_count'])
-                        c3.metric("Queue Status", api_data['status'].replace('_', ' '))
+                        c2.metric("Invoices Processed", len(api_data.get('results', [])))
+                        c3.metric("Total Savings Found", f"₹ {api_data.get('total_savings', 0):,.2f}")
                         
-                        st.info("ℹ️ The batch has been offloaded to the background worker queue. You can safely close this window or run another audit without crashing the browser. Results will populate in the Analytics tab once processing is complete.")
+                        if api_data.get('results'):
+                            batch_df = pd.DataFrame(api_data['results'])
+                            batch_df['Billed'] = batch_df['Billed'].apply(lambda x: f"₹ {x:,.2f}")
+                            batch_df['Recoverable'] = batch_df['Recoverable'].apply(lambda x: f"₹ {x:,.2f}")
+                            
+                            batch_id = f"BATCH-{datetime.datetime.now().strftime('%M%S')}"
+                            batch_status = "Discrepancy" if api_data.get('total_savings', 0) > 0 else "Clear"
+                            
+                            html_report = generate_html_report(batch_id, f"{carrier} (Batch)", batch_status, api_data.get('total_billed', 0), api_data.get('total_savings', 0), batch_df)
+                            
+                            st.session_state['batch_result'] = {
+                                "results": api_data['results'],
+                                "total_billed": api_data.get('total_billed', 0),
+                                "total_savings": api_data.get('total_savings', 0),
+                                "batch_df": batch_df,
+                                "batch_id": batch_id,
+                                "html_report": html_report
+                            }
+                        else:
+                            st.warning("Batch processed, but no valid invoice results were returned.")
                         
                     else:
-                        terminal.code(f"[ERROR] API Rejected Payload: {response.status_code}", language="bash")
-                        st.error("Enterprise API rejected the file. Check server logs.")
+                        st.error(f"Enterprise API rejected the file. Code: {response.status_code}")
                         
                 except Exception as e:
-                    terminal.code(f"[FATAL] Connection Refused. Is the Node.js server running on Port 3000?\nSystem Error: {e}", language="bash")
-                    st.error("Backend offline. Make sure the API server is running.")
+                    terminal.code(f"[FATAL] Backend Sync Error.\nSystem Error: {e}", language="bash")
+                    st.error("Backend offline or Payload mismatch. Check terminal logs.")
 
             # --- SINGLE PDF PROCESSING (REMAINS LOCAL FOR QUICK TESTS) ---
             else:
@@ -282,11 +291,39 @@ else:
                 log_audit(inv_id, status, billed, savings)
                 terminal.empty() 
                 
-                # --- SAVE SINGLE PDF TO PERSISTENT MEMORY ---
                 st.session_state['result'] = {
                     "id": inv_id, "carrier": carrier, "status": status, 
                     "billed": billed, "savings": savings, "details": details
                 }
+
+        # --- PERSISTENT DISPLAY FOR BATCH ZIP (THE FIX IS HERE) ---
+        if 'batch_result' in st.session_state and uploaded_file and uploaded_file.name.endswith('.zip'):
+            bres = st.session_state['batch_result']
+            
+            st.markdown("---")
+            st.subheader("Batch Export & Distribution")
+            
+            c4, c5 = st.columns(2)
+            with c4:
+                st.download_button(
+                    label="⬇️ Download Master Batch HTML Certificate", 
+                    data=bres['html_report'], 
+                    file_name=f"Batch_Audit_{bres['batch_id']}.html", 
+                    mime="text/html"
+                )
+            with c5:
+                email = st.text_input("Send Master Batch Report To:")
+                if st.button("Send Batch via Secure Mail") and email:
+                    if lottie_email: st_lottie(lottie_email, height=100, key="batch_mail_anim")
+                    ok, msg = send_real_email(
+                        email, 
+                        f"LedgerFlux Master Batch Audit: {bres['batch_id']}", 
+                        "Please find the attached formal Master Batch Audit Certificate.", 
+                        html_content=bres['html_report'], 
+                        filename=f"Batch_Audit_{bres['batch_id']}.html"
+                    )
+                    if ok: st.success("Batch Report Sent Successfully!")
+                    else: st.error(f"Failed to send: {msg}")
 
         # --- PERSISTENT DISPLAY FOR SINGLE PDF ---
         if 'result' in st.session_state and st.session_state['result'] and uploaded_file and not uploaded_file.name.endswith('.zip'):
@@ -319,7 +356,7 @@ else:
                 st.download_button("⬇️ Download Official HTML Certificate", data=html_report, file_name=f"Audit_{res['id']}.html", mime="text/html")
             with c5:
                 email = st.text_input("Email Report To:")
-                if st.button("Send via Secure Mail") and email:
+                if st.button("Send via Secure Mail", key="single_email_btn") and email:
                     if lottie_email: st_lottie(lottie_email, height=100, key="single_mail_anim")
                     ok, msg = send_real_email(
                         email, f"Audit Certificate: {res['id']}", 
@@ -340,7 +377,6 @@ else:
                 fig_pie.update_layout(paper_bgcolor="rgba(0,0,0,0)", font_color="#E0E0E0")
                 st.plotly_chart(fig_pie, use_container_width=True)
             with c2:
-                # CHANGED: y='recovered_amt' to y='total_savings'
                 fig_bar = px.bar(data, x='timestamp', y='total_savings', color_discrete_sequence=['#6C5DD3'])
                 fig_bar.update_layout(plot_bgcolor="#121212", paper_bgcolor="rgba(0,0,0,0)", font_color="#E0E0E0", xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#333'))
                 st.plotly_chart(fig_bar, use_container_width=True)
