@@ -4,7 +4,8 @@
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "lucide-react": "^1.7.0",
-    "multer": "^2.1.1"
+    "multer": "^2.1.1",
+    "nodemailer": "^8.0.5"
   },
   "devDependencies": {
     "@prisma/client": "^5.14.0",
