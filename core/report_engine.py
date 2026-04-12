@@ -1,72 +1,59 @@
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.application import MIMEApplication
+import requests
+import json
 import datetime
-import streamlit as st
 
-# --- SECURE EMAIL CONFIG ---
-try:
-    EMAIL_SENDER = st.secrets["EMAIL_SENDER"]
-    EMAIL_PASSWORD = st.secrets["EMAIL_PASSWORD"]
-except:
-    EMAIL_SENDER = "audit.ledgerflux@gmail.com"
-    EMAIL_PASSWORD = "otyf wtfh jwhw kywf"
+def generate_html_report(audit_id, carrier, status, total_billed, total_savings, df_details):
+    """Generates the Master HTML Certificate for the audit."""
+    
+    # Safely handle the dataframe to HTML conversion
+    try:
+        table_html = df_details.to_html(index=False, classes="audit-table")
+    except Exception:
+        table_html = "<p><i>Line item details unavailable.</i></p>"
 
-def generate_html_report(invoice_id, carrier, status, total_billed, total_savings, details_df):
     html = f"""
+    <!DOCTYPE html>
     <html>
     <head>
+        <title>LedgerFlux Audit: {audit_id}</title>
         <style>
-            body {{ font-family: 'Helvetica', sans-serif; color: #333; padding: 40px; background-color: #f4f4f4; }}
-            .container {{ background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 15px rgba(0,0,0,0.1); max-width: 850px; margin: auto; }}
-            .header {{ display: flex; justify-content: space-between; border-bottom: 3px solid #6C5DD3; padding-bottom: 20px; margin-bottom: 30px; }}
-            .logo {{ font-size: 28px; font-weight: 800; color: #6C5DD3; letter-spacing: -1px; }}
-            .status-box {{ padding: 8px 16px; border-radius: 4px; font-weight: bold; font-size: 14px; color: white; background-color: {'#FF5252' if status == 'Discrepancy' else '#00E676'}; }}
-            .metrics {{ display: flex; gap: 20px; margin-bottom: 40px; }}
-            .metric {{ background: #f8f9fa; padding: 20px; border-radius: 8px; width: 100%; border: 1px solid #eee; }}
-            .metric h3 {{ margin: 0 0 5px 0; font-size: 12px; text-transform: uppercase; color: #888; letter-spacing: 1px; }}
-            .metric p {{ margin: 0; font-size: 24px; font-weight: 700; color: #333; }}
-            table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
-            th {{ text-align: left; background: #f1f1f1; padding: 12px; font-size: 12px; font-weight: 700; color: #555; text-transform: uppercase; }}
-            td {{ padding: 12px; border-bottom: 1px solid #eee; font-size: 14px; color: #444; }}
-            tr:last-child td {{ border-bottom: none; }}
-            .footer {{ margin-top: 50px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #aaa; text-align: center; }}
-            .print-btn {{ background-color: #333; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-bottom: 20px; cursor: pointer; }}
-            @media print {{ .print-btn {{ display: none; }} body {{ background-color: white; padding: 0; }} .container {{ box-shadow: none; border: none; }} }}
+            body {{ font-family: 'Inter', Arial, sans-serif; background-color: #f4f7f6; color: #333; padding: 40px; }}
+            .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }}
+            .header {{ border-bottom: 2px solid #6C5DD3; padding-bottom: 10px; margin-bottom: 20px; }}
+            h1 {{ color: #111; margin: 0; }}
+            .status {{ display: inline-block; padding: 5px 12px; border-radius: 4px; font-weight: bold; background-color: {'#ffebee' if total_savings > 0 else '#e8f5e9'}; color: {'#c62828' if total_savings > 0 else '#2e7d32'}; }}
+            .metrics {{ display: flex; justify-content: space-between; background: #fafafa; padding: 15px; border-radius: 6px; margin-bottom: 20px; }}
+            .metric-box {{ text-align: center; }}
+            .audit-table {{ width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; }}
+            .audit-table th {{ background-color: #f0f0f0; padding: 12px; text-align: left; border-bottom: 2px solid #ddd; }}
+            .audit-table td {{ padding: 12px; border-bottom: 1px solid #eee; }}
+            .footer {{ margin-top: 30px; font-size: 12px; color: #777; text-align: center; }}
         </style>
     </head>
     <body>
         <div class="container">
-            <div style="text-align: right;">
-                <a onclick="window.print()" class="print-btn">🖨️ Save as PDF</a>
-            </div>
             <div class="header">
-                <div class="logo">⚡ LedgerFlux</div>
-                <div class="status-box">{status.upper()}</div>
+                <h1>⚡ LedgerFlux Official Audit</h1>
+                <p><strong>Reference ID:</strong> {audit_id} | <strong>Carrier:</strong> {carrier} | <strong>Date:</strong> {datetime.datetime.now().strftime("%Y-%m-%d")}</p>
+                <div class="status">{status.upper()}</div>
             </div>
             
             <div class="metrics">
-                <div class="metric">
-                    <h3>Audit Reference</h3>
-                    <p>{invoice_id}</p>
+                <div class="metric-box">
+                    <strong>Total Billed</strong><br>
+                    <span style="font-size: 20px;">₹ {total_billed:,.2f}</span>
                 </div>
-                <div class="metric">
-                    <h3>Invoiced Amount</h3>
-                    <p>₹ {total_billed:,.2f}</p>
-                </div>
-                <div class="metric">
-                    <h3>Recoverable Funds</h3>
-                    <p style="color: {'#FF5252' if total_savings > 0 else '#333'}">₹ {total_savings:,.2f}</p>
+                <div class="metric-box">
+                    <strong>Recoverable Leakage</strong><br>
+                    <span style="font-size: 20px; color: #c62828;">₹ {total_savings:,.2f}</span>
                 </div>
             </div>
 
-            <h3 style="margin-bottom: 15px; font-size: 16px;">Line Item Breakdown ({carrier})</h3>
-            {details_df.to_html(index=False, border=0)}
+            <h3>Line Item Analysis</h3>
+            {table_html}
 
             <div class="footer">
-                Generated by LedgerFlux Universal Audit Engine • {datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
-                <br>This document is a certified financial audit record.
+                <p>This is a certified digital audit generated by the LedgerFlux Enterprise Engine.</p>
             </div>
         </div>
     </body>
@@ -75,26 +62,28 @@ def generate_html_report(invoice_id, carrier, status, total_billed, total_saving
     return html
 
 def send_real_email(to_email, subject, body, html_content=None, filename="Audit_Report.html"):
-    if "YOUR_EMAIL" in EMAIL_SENDER:
-        return False, "⚠️ Email not configured."
+    """
+    Enterprise Routing: Bypasses Python SMTP and hands the payload to the Node.js Mailer API.
+    """
+    url = "http://localhost:3000/api/mail/send"
+    
+    payload = {
+        "to": to_email,
+        "subject": subject,
+        "text": body,
+        "html_content": html_content,
+        "filename": filename
+    }
+    
+    headers = {"Content-Type": "application/json"}
+    
     try:
-        msg = MIMEMultipart()
-        msg['From'] = EMAIL_SENDER
-        msg['To'] = to_email
-        msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'plain'))
-        
-        # ATTACH HTML FILE
-        if html_content:
-            part = MIMEApplication(html_content.encode('utf-8'), Name=filename)
-            part['Content-Disposition'] = f'attachment; filename="{filename}"'
-            msg.attach(part)
-            
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(EMAIL_SENDER, EMAIL_PASSWORD)
-        server.sendmail(EMAIL_SENDER, to_email, msg.as_string())
-        server.quit()
-        return True, "Email sent successfully!"
+        response = requests.post(url, data=json.dumps(payload), headers=headers, timeout=10)
+        if response.status_code == 200:
+            return True, "Email handed off to Node.js relay."
+        else:
+            return False, f"API Error: {response.text}"
+    except requests.exceptions.ConnectionError:
+        return False, "Connection to Node.js failed. Is Port 3000 running?"
     except Exception as e:
-        return False, str(e)
+        return False, f"Transmission error: {str(e)}"
