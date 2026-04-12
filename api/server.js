@@ -14,14 +14,11 @@ const app = express();
 
 // --- 1. ENTERPRISE MIDDLEWARE ---
 app.use(cors());
-app.use(express.json({ limit: '100mb' })); // Increased to 100mb for massive HTML attachments
+app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
 const uploadDir = path.join(__dirname, '../uploads');
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-    console.log("[BOOT] Secure uploads directory created.");
-}
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 const upload = multer({ dest: uploadDir });
 
 // --- 2. DATABASE SEEDER ---
@@ -34,7 +31,7 @@ async function initializeDB() {
         });
         console.log("[BOOT] System Client 'OMNIACTIVE-UUID-001' verified in Supabase.");
     } catch (e) {
-        console.error("[BOOT ERROR] Database connection failed. Check your .env file.", e.message);
+        console.error("[BOOT ERROR] Database connection failed.", e.message);
     }
 }
 initializeDB();
@@ -55,29 +52,22 @@ app.get('/api/audits/summary', async (req, res) => {
     try {
         const audits = await prisma.audit.findMany({ orderBy: { timestamp: 'desc' }, take: 50 });
         res.json(audits);
-    } catch (err) { 
-        console.error("[API ERROR] Failed to fetch summary:", err);
-        res.status(500).json({ error: err.message }); 
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- 4. BATCH PROCESSOR (WITH GARBAGE COLLECTION) ---
+// --- 4. BATCH PROCESSOR (UI DRIVEN) ---
 app.post('/api/upload/batch', upload.single('file'), async (req, res) => {
     let extractDir = null;
     try {
-        if (!req.file) return res.status(400).json({ error: "No ZIP file provided in the payload." });
+        if (!req.file) return res.status(400).json({ error: "No ZIP file provided." });
 
-        console.log(`\n[SYS] Payload received. Size: ${(req.file.size / 1024 / 1024).toFixed(2)} MB`);
-        
         const zip = new AdmZip(req.file.path);
         extractDir = path.join(uploadDir, `batch_${Date.now()}`);
         zip.extractAllTo(extractDir, true);
-        
-        // Delete the raw ZIP immediately
         if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
 
         const files = fs.readdirSync(extractDir).filter(f => f.toLowerCase().endsWith('.pdf'));
-        console.log(`[SYS] Unpacked ${files.length} PDFs. Engaging Python Workers...`);
+        console.log(`[SYS] UI Batch: Unpacked ${files.length} PDFs. Engaging Workers...`);
 
         const processedResults = [];
         let total_billed = 0;
@@ -85,139 +75,111 @@ app.post('/api/upload/batch', upload.single('file'), async (req, res) => {
 
         for (const file of files) {
             const filePath = path.join(extractDir, file);
-            
             await new Promise((resolve) => {
-                exec(`python3 core/analyzer.py "${filePath}"`, async (err, stdout, stderr) => {
-                    if (err) { 
-                        console.error(`[PY WORKER ERROR] Failed on ${file}: ${err.message}`); 
-                        return resolve(); 
-                    }
-                    
+                exec(`python3 core/analyzer.py "${filePath}"`, async (err, stdout) => {
+                    if (err) { console.error(`[PY ERROR] ${err.message}`); return resolve(); }
                     try {
-                        // TITANIUM PARSING: Extract ONLY the JSON, ignore Python warnings
                         const jsonMatch = stdout.match(/\{[\s\S]*\}/);
-                        if (!jsonMatch) throw new Error("No valid JSON found in Python output.");
-                        
                         const result = JSON.parse(jsonMatch[0]);
                         
-                        // DB INSERT
                         await prisma.audit.create({
                             data: {
-                                clientId: "OMNIACTIVE-UUID-001", 
-                                invoice_number: result.invoice_id,
-                                carrier_name: result.carrier,
-                                status: result.status,
-                                total_billed: result.total_billed,
-                                total_savings: result.total_savings
+                                clientId: "OMNIACTIVE-UUID-001", invoice_number: result.invoice_id,
+                                carrier_name: result.carrier, status: result.status,
+                                total_billed: result.total_billed, total_savings: result.total_savings
                             }
                         });
-                        console.log(`[DB SUCCESS] Invoice ${result.invoice_id} secured.`);
-                        
-                        processedResults.push({
-                            "Invoice ID": result.invoice_id, 
-                            "Carrier": result.carrier,
-                            "Status": result.status, 
-                            "Billed": result.total_billed, 
-                            "Recoverable": result.total_savings
-                        });
-                        total_billed += result.total_billed;
-                        total_savings += result.total_savings;
-
-                    } catch (parseDbErr) {
-                        console.error("[CRITICAL] Processing failed for file:", file, "| Error:", parseDbErr.message);
-                    }
+                        processedResults.push({"Invoice ID": result.invoice_id, "Carrier": result.carrier, "Status": result.status, "Billed": result.total_billed, "Recoverable": result.total_savings});
+                        total_billed += result.total_billed; total_savings += result.total_savings;
+                    } catch (e) { console.error("[PARSE ERROR]", e.message); }
                     resolve();
                 });
             });
         }
         
-        // AUTO-GARBAGE COLLECTION: Delete the extracted PDFs to save disk space
-        if (fs.existsSync(extractDir)) {
-            fs.rmSync(extractDir, { recursive: true, force: true });
-            console.log(`[SYS] Garbage Collection: Wiped temporary folder ${extractDir}`);
-        }
+        if (fs.existsSync(extractDir)) fs.rmSync(extractDir, { recursive: true, force: true });
 
-        // Return Data to UI
-        res.status(200).json({
-            message: "Batch processed successfully.",
-            results: processedResults,
-            total_billed: total_billed,
-            total_savings: total_savings
-        });
-
+        res.status(200).json({ message: "Batch processed.", results: processedResults, total_billed, total_savings });
     } catch (err) {
-        console.error("[FATAL SERVER ERROR]", err);
-        // Ensure cleanup happens even if the server crashes mid-process
-        if (extractDir && fs.existsSync(extractDir)) {
-            fs.rmSync(extractDir, { recursive: true, force: true });
-        }
-        if (!res.headersSent) res.status(500).json({ error: "Internal Server Error during Batch Processing." });
+        if (extractDir && fs.existsSync(extractDir)) fs.rmSync(extractDir, { recursive: true, force: true });
+        if (!res.headersSent) res.status(500).json({ error: "Server Error" });
     }
 });
 
-// --- 5. AUTOMATED DISPUTE RELAY (PHASE 3) ---
+// --- 5. AUTOMATED DISPUTE RELAY ---
 app.post('/api/mail/send', async (req, res) => {
     try {
         const { to, subject, text, html_content, filename } = req.body;
-        
-        if (!to || !subject) {
-            return res.status(400).json({ error: "Missing required email fields (to, subject)." });
-        }
-
-        console.log(`\n[MAILER] Engaging SMTP Relay to: ${to}`);
-
-        // --- THE FIX: DYNAMICALLY GENERATE A FRESH TEST ACCOUNT EVERY TIME ---
-        console.log("[MAILER] Generating fresh secure SMTP credentials...");
         const testAccount = await nodemailer.createTestAccount();
-
-        const transporter = nodemailer.createTransport({
-            host: 'smtp.ethereal.email',
-            port: 587,
-            secure: false,
-            auth: {
-                user: testAccount.user, // Uses the freshly generated username
-                pass: testAccount.pass  // Uses the freshly generated password
-            }
-        });
+        const transporter = nodemailer.createTransport({ host: 'smtp.ethereal.email', port: 587, secure: false, auth: { user: testAccount.user, pass: testAccount.pass } });
 
         const mailOptions = {
-            from: '"LedgerFlux Enterprise" <disputes@ledgerflux.com>',
-            to: to,
-            subject: subject,
-            text: text,
-            html: `
-                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-                    <h2 style="color: #6C5DD3;">LedgerFlux Automated Dispute Request</h2>
-                    <p>${text}</p>
-                    <hr style="border: 1px solid #eee; margin: 20px 0;">
-                    <p style="font-size: 12px; color: #888;">This is an automated legal dispute generated by the LedgerFlux System. Please review the attached HTML Certificate.</p>
-                </div>
-            `,
-            attachments: [
-                {
-                    filename: filename || "Audit_Certificate.html",
-                    content: html_content || "<p>No data provided.</p>",
-                    contentType: 'text/html'
-                }
-            ]
+            from: '"LedgerFlux" <disputes@ledgerflux.com>', to: to, subject: subject, text: text,
+            html: `<div style="font-family: Arial;"><h2 style="color: #6C5DD3;">Automated Dispute</h2><p>${text}</p></div>`,
+            attachments: [{ filename: filename || "Audit.html", content: html_content || "", contentType: 'text/html' }]
         };
 
         const info = await transporter.sendMail(mailOptions);
-        console.log(`[MAIL SUCCESS] Packet delivered. ID: ${info.messageId}`);
-        
-        const previewUrl = nodemailer.getTestMessageUrl(info);
-        console.log(`[PREVIEW LINK] Open this URL to view the sent email: ${previewUrl}\n`);
+        console.log(`[MAIL SUCCESS] ID: ${info.messageId} | PREVIEW: ${nodemailer.getTestMessageUrl(info)}`);
+        res.status(200).json({ message: "Dispute Sent" });
+    } catch (err) { res.status(500).json({ error: "Mail failed" }); }
+});
 
-        res.status(200).json({ message: "Dispute Sent", preview: previewUrl });
+// --- 6. PHASE 4: THE ZERO-TOUCH WEBHOOK CONVEYOR BELT ---
+
+// 6A. Security Middleware
+const verifyWebhookKey = (req, res, next) => {
+    const apiKey = req.headers['x-api-key'];
+    if (apiKey !== "lf_live_enterprise_991") {
+        console.log("[SECURITY] Blocked unauthorized webhook attempt.");
+        return res.status(403).json({ error: "Unauthorized. Invalid LedgerFlux API Key." });
+    }
+    next();
+};
+
+// 6B. Auto-Ingest Route
+app.post('/api/webhook/ingest', verifyWebhookKey, upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: "No PDF provided." });
+        console.log(`\n[WEBHOOK] Secure Zero-Touch Payload Received. Auto-Auditing...`);
+
+        const filePath = req.file.path;
+        
+        exec(`python3 core/analyzer.py "${filePath}"`, async (err, stdout) => {
+            // Garbage Collection
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+            if (err) return res.status(500).json({ error: "OCR Engine Failure" });
+            
+            try {
+                const jsonMatch = stdout.match(/\{[\s\S]*\}/);
+                const result = JSON.parse(jsonMatch[0]);
+                
+                // Save to Cloud DB
+                await prisma.audit.create({
+                    data: {
+                        clientId: "OMNIACTIVE-UUID-001", invoice_number: result.invoice_id,
+                        carrier_name: result.carrier, status: result.status,
+                        total_billed: result.total_billed, total_savings: result.total_savings
+                    }
+                });
+                
+                console.log(`[WEBHOOK SUCCESS] Auto-audited Invoice ${result.invoice_id}. Savings: ₹${result.total_savings}`);
+                res.status(200).json({ message: "Ingested & Audited", data: result });
+            } catch (e) {
+                console.error("[WEBHOOK ERROR]", e.message);
+                res.status(500).json({ error: "Data processing failed" });
+            }
+        });
     } catch (err) {
-        console.error("[MAIL ERROR] SMTP Relay Failed:", err);
-        res.status(500).json({ error: "Failed to dispatch email." });
+        res.status(500).json({ error: "Webhook failure." });
     }
 });
-// --- 6. IGNITION ---
+
+// --- 7. IGNITION ---
 const PORT = 3000;
 app.listen(PORT, '0.0.0.0', () => { 
     console.log(`====================================================`);
     console.log(`⚡ LEDGERFLUX API ROUTER ONLINE : PORT ${PORT}`);
     console.log(`====================================================\n`);
-}); 
+});
