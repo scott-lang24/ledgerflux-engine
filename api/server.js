@@ -166,13 +166,17 @@ app.post('/api/mail/send', async (req, res) => {
 
         console.log(`\n[MAILER] Engaging SMTP Relay to: ${to}`);
 
-        // Set up the SMTP Transporter (Ethereal Testing)
+        // --- THE FIX: DYNAMICALLY GENERATE A FRESH TEST ACCOUNT EVERY TIME ---
+        console.log("[MAILER] Generating fresh secure SMTP credentials...");
+        const testAccount = await nodemailer.createTestAccount();
+
         const transporter = nodemailer.createTransport({
             host: 'smtp.ethereal.email',
             port: 587,
+            secure: false,
             auth: {
-                user: 'melyssa.cruickshank60@ethereal.email',
-                pass: 'zN915M6fCwk5T1Fbdw'
+                user: testAccount.user, // Uses the freshly generated username
+                pass: testAccount.pass  // Uses the freshly generated password
             }
         });
 
@@ -210,7 +214,6 @@ app.post('/api/mail/send', async (req, res) => {
         res.status(500).json({ error: "Failed to dispatch email." });
     }
 });
-
 // --- 6. IGNITION ---
 const PORT = 3000;
 app.listen(PORT, '0.0.0.0', () => { 
