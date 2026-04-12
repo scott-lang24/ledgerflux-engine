@@ -296,10 +296,35 @@ else:
                     "billed": billed, "savings": savings, "details": details
                 }
 
-        # --- PERSISTENT DISPLAY FOR BATCH ZIP (THE FIX IS HERE) ---
+        # --- PERSISTENT DISPLAY FOR BATCH ZIP ---
         if 'batch_result' in st.session_state and uploaded_file and uploaded_file.name.endswith('.zip'):
             bres = st.session_state['batch_result']
             
+            # 1. ADD THE BATCH SUMMARY TABLE
+            st.subheader("Batch Audit Summary")
+            df_show = bres['batch_df'].copy()
+            
+            def highlight_batch_error(row):
+                if row.get('Status') == 'Discrepancy': return ['background-color: #381E1E'] * len(row)
+                return [''] * len(row)
+                
+            st.table(df_show.style.apply(highlight_batch_error, axis=1))
+
+            # 2. ADD THE MASTER BATCH DISPUTE DRAFT
+            if bres['total_savings'] > 0:
+                st.subheader("Auto-Generated Master Dispute")
+                disputed_count = len(df_show[df_show['Status'] == 'Discrepancy'])
+                
+                draft = f"Subject: URGENT: Consolidated SLA/Billing Discrepancy Notice - Batch {bres['batch_id']}\n\n"
+                draft += f"To Carrier Billing Department,\n\n"
+                draft += f"We are writing to formally dispute charges totaling ₹ {bres['total_savings']:,.2f} across {disputed_count} flagged invoices in our recent batch audit.\n\n"
+                draft += "Our automated LedgerFlux engine has identified violations based on our contracted rate cards and SLA agreements. Please review the attached Master Audit Certificate for the complete breakdown of affected invoices and expected savings.\n\n"
+                draft += "We expect a consolidated credit note issued for the disputed amount within 5 business days.\n\n"
+                draft += "Regards,\nLedgerFlux Automated Dispute System"
+                
+                st.text_area("Copy and send to carrier billing (or use Secure Mail below):", value=draft, height=200)
+
+            # 3. EXPORT & DISTRIBUTION BUTTONS
             st.markdown("---")
             st.subheader("Batch Export & Distribution")
             
@@ -324,7 +349,7 @@ else:
                     )
                     if ok: st.success("Batch Report Sent Successfully!")
                     else: st.error(f"Failed to send: {msg}")
-
+                    
         # --- PERSISTENT DISPLAY FOR SINGLE PDF ---
         if 'result' in st.session_state and st.session_state['result'] and uploaded_file and not uploaded_file.name.endswith('.zip'):
             res = st.session_state['result']
