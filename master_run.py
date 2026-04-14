@@ -124,7 +124,7 @@ lottie_email = load_lottie_url("https://assets5.lottiefiles.com/packages/lf20_sw
 
 def get_client_stats():
     try:
-        response = requests.get("http://localhost:3000/api/audits/summary")
+        response = requests.get("https://ledgerflux-engine.onrender.com/api/audits/summary")
         if response.status_code == 200:
             return pd.DataFrame(response.json())
         else:
@@ -232,7 +232,7 @@ else:
                     files = {'file': (uploaded_file.name, uploaded_file.getvalue(), 'application/zip')}
                     
                     with st.spinner("Enterprise Engine Processing Batch..."):
-                        response = requests.post("http://localhost:3000/api/upload/batch", files=files)
+                        response = requests.post("https://ledgerflux-engine.onrender.com/api/upload/batch", files=files)
                     
                     if response.status_code == 200:
                         api_data = response.json()
