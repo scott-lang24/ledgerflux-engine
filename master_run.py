@@ -380,43 +380,31 @@ else:
                 draft += "Regards,\nLedgerFlux Automated Dispute System"
                 
                 st.text_area("Copy and send to carrier billing (or use Secure Mail below):", value=draft, height=200)
-# --- HARVEY'S CLOSER: EXPORT & DISTRIBUTION FOR BATCH (PERSISTANT DISPLAY FOR ZIP. EQUALITY HAHAHA.) ---
+                
+            # --- THE BATCH EXPORT & DISTRIBUTION CLOSER ---
             st.markdown("---")
-            st.subheader("Export & Distribution")
+            st.subheader("Batch Export & Distribution")
             
-            # 1. Adapt the variables so the HTML generator doesn't choke
-            batch_billed = df_show['Billed'].sum() if 'Billed' in df_show.columns else 0
+            # We pull the HTML report directly from your new native engine state
+            html_report = bres.get('html_report', "")
             
-            # 2. Generate the Master HTML Report
-            html_report = generate_html_report(
-                f"BATCH-{bres['batch_id']}", 
-                "Multiple Carriers", 
-                "Batch Audit Processed", 
-                batch_billed, 
-                bres['total_savings'], 
-                df_show
-            )
-            
-            # 3. The Delivery Mechanism
             c4, c5 = st.columns(2)
             with c4:
                 st.download_button(
-                    "⬇️ Download Master HTML Certificate", 
+                    "⬇️ Download Master Batch HTML Certificate", 
                     data=html_report, 
                     file_name=f"Batch_Audit_{bres['batch_id']}.html", 
                     mime="text/html",
                     key="batch_download_btn"
                 )
             with c5:
-                email = st.text_input("Email Batch Report To:", key="batch_email_input")
+                email = st.text_input("Corporate Email for Master Report:", key="batch_email_input")
                 if st.button("Send Batch via Secure Mail", key="batch_email_btn") and email:
                     try:
-                        # Optional: Fire the animation if it exists
                         if 'lottie_email' in globals() and lottie_email: 
                             st_lottie(lottie_email, height=100, key="batch_mail_anim")
                     except Exception: pass
                     
-                    # Fire the payload
                     ok, msg = send_real_email(
                         email, 
                         f"URGENT: Consolidated Batch Audit - {bres['batch_id']}", 
