@@ -352,8 +352,7 @@ else:
                     "id": inv_id, "carrier": carrier, "status": status, 
                     "billed": billed, "savings": savings, "details": details
                 }
-
-        # --- PERSISTENT DISPLAY FOR BATCH ZIP ---
+# --- PERSISTENT DISPLAY FOR BATCH ZIP ---
         if 'batch_result' in st.session_state and uploaded_file and uploaded_file.name.endswith('.zip'):
             bres = st.session_state['batch_result']
             
@@ -380,8 +379,7 @@ else:
                 draft += "Regards,\nLedgerFlux Automated Dispute System"
                 
                 st.text_area("Copy and send to carrier billing (or use Secure Mail below):", value=draft, height=200)
-                
-            # --- THE BATCH EXPORT & DISTRIBUTION CLOSER ---
+# --- THE BATCH EXPORT & DISTRIBUTION CLOSER ---
             st.markdown("---")
             st.subheader("Batch Export & Distribution")
             
@@ -418,32 +416,6 @@ else:
                     else: 
                         st.error(f"Transmission failed: {msg}")
 
-            # 3. EXPORT & DISTRIBUTION BUTTONS
-            st.markdown("---")
-            st.subheader("Batch Export & Distribution")
-            
-            c4, c5 = st.columns(2)
-            with c4:
-                st.download_button(
-                    label="⬇️ Download Master Batch HTML Certificate", 
-                    data=bres['html_report'], 
-                    file_name=f"Batch_Audit_{bres['batch_id']}.html", 
-                    mime="text/html"
-                )
-            with c5:
-                email = st.text_input("Send Master Batch Report To:")
-                if st.button("Send Batch via Secure Mail") and email:
-                    if lottie_email: st_lottie(lottie_email, height=100, key="batch_mail_anim")
-                    ok, msg = send_real_email(
-                        email, 
-                        f"LedgerFlux Master Batch Audit: {bres['batch_id']}", 
-                        "Please find the attached formal Master Batch Audit Certificate.", 
-                        html_content=bres['html_report'], 
-                        filename=f"Batch_Audit_{bres['batch_id']}.html"
-                    )
-                    if ok: st.success("Batch Report Sent Successfully!")
-                    else: st.error(f"Failed to send: {msg}")
-                    
         # --- PERSISTENT DISPLAY FOR SINGLE PDF ---
         if 'result' in st.session_state and st.session_state['result'] and uploaded_file and not uploaded_file.name.endswith('.zip'):
             res = st.session_state['result']
