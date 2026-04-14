@@ -224,53 +224,110 @@ else:
             terminal = st.empty()
             
             # --- BATCH ZIP LOGIC (ROUTED TO ENTERPRISE API) ---
+            # --- BATCH ZIP LOGIC (NATIVE PYTHON EXECUTION) ---
             if uploaded_file.name.endswith('.zip'):
-                terminal.code("[SYS] Packaging payload... routing to Enterprise API (Port 3000).", language="bash")
-                time.sleep(1)
+                terminal.code("[SYS] Engine Switch: Unpacking & Analyzing batch natively...", language="bash")
+                
+                import zipfile
+                import tempfile
+                import os
+                import subprocess
+                import re
+                import json
+                import datetime
                 
                 try:
-                    files = {'file': (uploaded_file.name, uploaded_file.getvalue(), 'application/zip')}
+                    results_list = []
+                    total_billed = 0.0
+                    total_savings = 0.0
                     
-                    with st.spinner("Enterprise Engine Processing Batch..."):
-                        response = requests.post("https://ledgerflux-engine.onrender.com/api/upload/batch", files=files)
-                    
-                    if response.status_code == 200:
-                        api_data = response.json()
+                    # 1. Create a secure temporary workspace
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        zip_path = os.path.join(temp_dir, "batch.zip")
+                        with open(zip_path, "wb") as f:
+                            f.write(uploaded_file.getvalue())
+                            
+                        # Unpack the ZIP
+                        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                            zip_ref.extractall(temp_dir)
+                            
+                        # 2. Iterate through every extracted file
+                        for root, _, files in os.walk(temp_dir):
+                            for file in files:
+                                if file.lower().endswith('.pdf'):
+                                    pdf_path = os.path.join(root, file)
+                                    terminal.code(f"Scanning: {file}...", language="bash")
+                                    
+                                    # 3. Fire the OCR Engine Natively
+                                    try:
+                                        output = subprocess.check_output(['python3', 'core/analyzer.py', pdf_path], text=True)
+                                        
+                                        # Extract JSON from the raw terminal output
+                                        json_match = re.search(r'\{[\s\S]*\}', output)
+                                        if json_match:
+                                            res = json.loads(json_match.group(0))
+                                            results_list.append({
+                                                "Invoice ID": res['invoice_id'],
+                                                "Carrier": res['carrier'],
+                                                "Status": res['status'],
+                                                "Billed": res['total_billed'],
+                                                "Recoverable": res['total_savings']
+                                            })
+                                            total_billed += res['total_billed']
+                                            total_savings += res['total_savings']
+                                            
+                                            # 4. Lock data directly into Supabase Vault
+                                            try:
+                                                supabase.table('audit').insert({
+                                                    "clientId": st.session_state.get('user_id', "OMNIACTIVE-UUID-001"),
+                                                    "invoice_number": res['invoice_id'],
+                                                    "carrier_name": res['carrier'],
+                                                    "status": res['status'],
+                                                    "total_billed": res['total_billed'],
+                                                    "total_savings": res['total_savings']
+                                                }).execute()
+                                            except Exception as db_err:
+                                                pass # Ignore duplicates if already synced
+                                                
+                                    except Exception as py_err:
+                                        terminal.code(f"[ERROR] Failed to read {file}.", language="bash")
+
+                    # 5. Feed the Display Engine
+                    if results_list:
                         terminal.empty()
-                        st.success("Handoff Complete: Supabase Database Synced.")
+                        st.success("Local Batch Analysis Complete. Data Locked in Supabase Vault.")
                         
                         c1, c2, c3 = st.columns(3)
-                        c1.metric("API Status", "200 OK")
-                        c2.metric("Invoices Processed", len(api_data.get('results', [])))
-                        c3.metric("Total Savings Found", f"₹ {api_data.get('total_savings', 0):,.2f}")
+                        c1.metric("Engine Status", "Native Python Executed")
+                        c2.metric("Invoices Processed", len(results_list))
+                        c3.metric("Total Savings Found", f"₹ {total_savings:,.2f}")
                         
-                        if api_data.get('results'):
-                            batch_df = pd.DataFrame(api_data['results'])
-                            batch_df['Billed'] = batch_df['Billed'].apply(lambda x: f"₹ {x:,.2f}")
-                            batch_df['Recoverable'] = batch_df['Recoverable'].apply(lambda x: f"₹ {x:,.2f}")
-                            
-                            batch_id = f"BATCH-{datetime.datetime.now().strftime('%M%S')}"
-                            batch_status = "Discrepancy" if api_data.get('total_savings', 0) > 0 else "Clear"
-                            
-                            html_report = generate_html_report(batch_id, f"{carrier} (Batch)", batch_status, api_data.get('total_billed', 0), api_data.get('total_savings', 0), batch_df)
-                            
-                            st.session_state['batch_result'] = {
-                                "results": api_data['results'],
-                                "total_billed": api_data.get('total_billed', 0),
-                                "total_savings": api_data.get('total_savings', 0),
-                                "batch_df": batch_df,
-                                "batch_id": batch_id,
-                                "html_report": html_report
-                            }
-                        else:
-                            st.warning("Batch processed, but no valid invoice results were returned.")
+                        # IMPORTANT: We keep numbers as floats here so your new sum() logic doesn't crash!
+                        batch_df = pd.DataFrame(results_list)
                         
+                        batch_id = f"BATCH-{datetime.datetime.now().strftime('%M%S')}"
+                        batch_status = "Discrepancy" if total_savings > 0 else "Clear"
+                        
+                        # We pass the raw numbers to generate_html_report
+                        html_report = generate_html_report(batch_id, "Multiple Carriers", batch_status, total_billed, total_savings, batch_df)
+                        
+                        st.session_state['batch_result'] = {
+                            "results": results_list,
+                            "total_billed": total_billed,
+                            "total_savings": total_savings,
+                            "batch_df": batch_df,
+                            "batch_id": batch_id,
+                            "html_report": html_report
+                        }
+                        
+                        # Rerun to trigger your new persistent ZIP display
+                        st.rerun()
                     else:
-                        st.error(f"Enterprise API rejected the file. Code: {response.status_code}")
+                        st.warning("Batch processed, but no valid readable PDFs were found.")
                         
                 except Exception as e:
-                    terminal.code(f"[FATAL] Backend Sync Error.\nSystem Error: {e}", language="bash")
-                    st.error("Backend offline or Payload mismatch. Check terminal logs.")
+                    terminal.code(f"[FATAL] Native Engine Error.\n{e}", language="bash")
+                    st.error("Failed to process batch natively.")
 
             # --- SINGLE PDF PROCESSING (REMAINS LOCAL FOR QUICK TESTS) ---
             else:
