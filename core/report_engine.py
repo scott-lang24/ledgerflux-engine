@@ -65,7 +65,7 @@ def send_real_email(to_email, subject, body, html_content=None, filename="Audit_
     """
     Enterprise Routing: Bypasses Python SMTP and hands the payload to the Node.js Mailer API.
     """
-    url = "http://localhost:3000/api/mail/send"
+    url = "https://ledgerflux-engine.onrender.com/api/mail/send"
     
     payload = {
         "to": to_email,
