@@ -1,4 +1,13 @@
-import streamlit as st
+from supabase import create_client, Client
+
+# --- SUPABASE INIT ---
+@st.cache_resource
+def init_supabase():
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
+
+supabase = init_supabase()
 import pandas as pd
 import zipfile
 import sqlite3
@@ -124,14 +133,15 @@ lottie_email = load_lottie_url("https://assets5.lottiefiles.com/packages/lf20_sw
 
 def get_client_stats():
     try:
-        response = requests.get("https://ledgerflux-engine.onrender.com/api/audits/summary")
+        # We append the secure user_id so Render only fetches THIS client's data
+        user_id = st.session_state.get('user_id', '')
+        response = requests.get(f"https://ledgerflux-engine.onrender.com/api/audits/summary?clientId={user_id}")
         if response.status_code == 200:
             return pd.DataFrame(response.json())
         else:
             return pd.DataFrame()
     except:
         return pd.DataFrame()
-
 # --- 4. MAIN APP & LOGIN FLOW ---
 if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
 
@@ -140,25 +150,29 @@ def login():
     with c2:
         st.markdown("<br><br><br>", unsafe_allow_html=True)
         st.markdown("## ⚡ LedgerFlux")
-        st.caption("Secure Portal Access")
+        st.caption("Enterprise Secure Vault")
         with st.form("login_form"):
-            username = st.text_input("Username")
+            email = st.text_input("Corporate Email")
             password = st.text_input("Password", type="password")
-            if st.form_submit_button("Log In"):
-                conn = get_db_connection()
-                c = conn.cursor()
-                c.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password))
-                user = c.fetchone()
-                conn.close()
-                if user:
+            if st.form_submit_button("Authenticate"):
+                try:
+                    # The Cryptographic Handshake
+                    auth_response = supabase.auth.sign_in_with_password({"email": email, "password": password})
+                    
                     st.session_state['logged_in'] = True
-                    st.session_state['user_info'] = {'user': user[0], 'company': "Demo Client"}
+                    st.session_state['user_id'] = auth_response.user.id
+                    
+                    # Auto-extract company name from email (e.g., cfo@omniactive.com -> Omniactive)
+                    company_name = email.split('@')[1].split('.')[0].capitalize()
+                    st.session_state['user_info'] = {'user': email, 'company': company_name}
+                    
                     st.rerun()
-                else: st.error("Invalid Credentials")
+                except Exception as e:
+                    st.error("🚨 Access Denied: Invalid credentials.")
 
 if not st.session_state['logged_in']:
     login()
-    st.info("Demo Access: `user1` | `demo123`")
+    st.stop() # Halts all execution here until the handshake clearsR
 else:
     user = st.session_state['user_info']
     company = user['company']
