@@ -1,3 +1,4 @@
+import streamlit as st
 import pandas as pd
 import zipfile
 import sqlite3
@@ -12,6 +13,16 @@ import random
 from streamlit_option_menu import option_menu
 from streamlit_lottie import st_lottie
 from io import BytesIO
+from supabase import create_client, Client
+
+# --- SUPABASE INIT ---
+@st.cache_resource
+def init_supabase():
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
+
+supabase = init_supabase()
 
 # --- IMPORT OUR NEW MODULAR ENGINES ---
 from core.db_manager import init_db, log_audit, get_db_connection
