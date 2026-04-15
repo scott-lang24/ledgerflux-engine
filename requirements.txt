@@ -9,4 +9,3 @@ fastapi
 uvicorn
 python-multipart
 sqlalchemy
-supabase>=2.3.0
