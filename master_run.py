@@ -148,9 +148,6 @@ if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
 
 def login():
     c1, c2, c3 = st.columns([1, 1, 1])
-    # ... rest of the code ...
-def login():
-    c1, c2, c3 = st.columns([1, 1, 1])
     with c2:
         st.markdown("<br><br><br>", unsafe_allow_html=True)
         st.markdown("## ⚡ LedgerFlux")
