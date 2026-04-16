@@ -10,6 +10,7 @@ import requests
 import pdfplumber
 import re
 import random
+import threading
 from streamlit_option_menu import option_menu
 from streamlit_lottie import st_lottie
 from io import BytesIO
@@ -276,110 +277,70 @@ else:
             if lottie_scanning: st_lottie(lottie_scanning, height=200, key="scan")
             terminal = st.empty()
             
+            # --- BATCH ZIP LOGIC (ASYNC BACKGROUND QUEUE) ---
             if uploaded_file.name.endswith('.zip'):
-                terminal.code("[SYS] Engine Switch: Unpacking & Analyzing batch natively...", language="bash")
+                terminal.code("[SYS] Engine Switch: Routing to Async Background Queue...", language="bash")
                 
                 import tempfile
                 import subprocess
                 import json
                 
-                try:
-                    results_list = []
-                    total_billed = 0.0
-                    total_savings = 0.0
-                    
-                    with tempfile.TemporaryDirectory() as temp_dir:
-                        zip_path = os.path.join(temp_dir, "batch.zip")
-                        with open(zip_path, "wb") as f:
-                            f.write(uploaded_file.getvalue())
-                            
-                        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                            zip_ref.extractall(temp_dir)
-                            
-                        pdf_paths = []
-                        for root, _, files in os.walk(temp_dir):
-                            for file in files:
-                                if file.lower().endswith('.pdf'):
-                                    pdf_paths.append(os.path.join(root, file))
-                        
-                        total_files = len(pdf_paths)
-                        if total_files > 0:
-                            progress_bar = st.progress(0)
-                            status_text = st.empty()
-                            
-                            for i, pdf_path in enumerate(pdf_paths):
-                                file_name = os.path.basename(pdf_path)
-                                status_text.markdown(f"**Scanning ({i+1}/{total_files}):** `{file_name}`...")
-                                terminal.code(f"Extracting OCR data for: {file_name}...", language="bash")
+                # 1. Define the Ghost Worker (Runs invisibly)
+                def background_processor(file_bytes, client_id, batch_id):
+                    try:
+                        with tempfile.TemporaryDirectory() as temp_dir:
+                            zip_path = os.path.join(temp_dir, "batch.zip")
+                            with open(zip_path, "wb") as f:
+                                f.write(file_bytes)
                                 
-                                try:
-                                    output = subprocess.check_output(['python3', 'core/analyzer.py', pdf_path], text=True)
-                                    json_match = re.search(r'\{[\s\S]*\}', output)
-                                    if json_match:
-                                        res = json.loads(json_match.group(0))
-                                        results_list.append({
-                                            "Invoice ID": res['invoice_id'],
-                                            "Carrier": res['carrier'],
-                                            "Status": res['status'],
-                                            "Billed": res['total_billed'],
-                                            "Recoverable": res['total_savings']
-                                        })
-                                        total_billed += res['total_billed']
-                                        total_savings += res['total_savings']
-                                        
+                            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                                zip_ref.extractall(temp_dir)
+                                
+                            # Initialize thread-safe DB connection
+                            local_supabase = init_supabase()
+                            
+                            for root, _, files in os.walk(temp_dir):
+                                for file in files:
+                                    if file.lower().endswith('.pdf'):
+                                        pdf_path = os.path.join(root, file)
                                         try:
-                                            supabase.table('audit').insert({
-                                                "clientId": st.session_state.get('user_id', "OMNIACTIVE-UUID-001"),
-                                                "invoice_number": res['invoice_id'],
-                                                "carrier_name": res['carrier'],
-                                                "status": res['status'],
-                                                "total_billed": res['total_billed'],
-                                                "total_savings": res['total_savings']
-                                            }).execute()
-                                        except Exception as db_err:
-                                            pass 
-                                            
-                                except Exception as py_err:
-                                    terminal.code(f"[ERROR] Failed to read {file_name}.", language="bash")
-                                
-                                progress_bar.progress((i + 1) / total_files)
-                            
-                            status_text.empty()
-                        else:
-                            st.warning("No PDF files found inside the ZIP.")
+                                            # Fire OCR
+                                            output = subprocess.check_output(['python3', 'core/analyzer.py', pdf_path], text=True)
+                                            json_match = re.search(r'\{[\s\S]*\}', output)
+                                            if json_match:
+                                                res = json.loads(json_match.group(0))
+                                                
+                                                # Inject straight to DB without blocking UI
+                                                local_supabase.table('audit').insert({
+                                                    "clientId": client_id,
+                                                    "invoice_number": res['invoice_id'],
+                                                    "carrier_name": res['carrier'],
+                                                    "status": res['status'],
+                                                    "total_billed": res['total_billed'],
+                                                    "total_savings": res['total_savings']
+                                                }).execute()
+                                        except Exception:
+                                            pass # Skip corrupted files silently in the background
+                    except Exception as e:
+                        print(f"Background thread crashed: {e}")
 
-                    if results_list:
-                        terminal.empty()
-                        st.success("✅ Batch processing complete. Data Locked in Supabase Vault.")
-                        
-                        c1, c2, c3 = st.columns(3)
-                        c1.metric("Engine Status", "Native Python Executed")
-                        c2.metric("Invoices Processed", len(results_list))
-                        c3.metric("Total Savings Found", f"₹ {total_savings:,.2f}")
-                        
-                        batch_df = pd.DataFrame(results_list)
-                        
-                        batch_id = f"BATCH-{datetime.datetime.now().strftime('%M%S')}"
-                        batch_status = "Discrepancy" if total_savings > 0 else "Clear"
-                        
-                        html_report = generate_html_report(batch_id, "Multiple Carriers", batch_status, total_billed, total_savings, batch_df)
-                        
-                        st.session_state['batch_result'] = {
-                            "results": results_list,
-                            "total_billed": total_billed,
-                            "total_savings": total_savings,
-                            "batch_df": batch_df,
-                            "batch_id": batch_id,
-                            "html_report": html_report
-                        }
-                        st.rerun()
-                    else:
-                        st.warning("Batch processed, but no valid readable PDFs were found.")
-                        
-                except Exception as e:
-                    terminal.code(f"[FATAL] Native Engine Error.\n{e}", language="bash")
-                    st.error("Failed to process batch natively.")
+                # 2. Trigger Fire-and-Forget Protocol
+                batch_id = f"BATCH-{datetime.datetime.now().strftime('%M%S')}"
+                client_uuid = st.session_state.get('user_id', "OMNIACTIVE-UUID-001")
+                
+                # We extract the raw bytes into memory to hand to the thread
+                zip_bytes = uploaded_file.getvalue() 
+                
+                # Spin up the ghost worker
+                thread = threading.Thread(target=background_processor, args=(zip_bytes, client_uuid, batch_id))
+                thread.start()
+                
+                terminal.empty()
+                st.success(f"✅ Task {batch_id} successfully queued into background workers.")
+                st.info("🔄 You may now safely navigate away, check analytics, or log out. The engine is churning in the background and will populate your Dashboard as files complete.")
+                st.balloons()
 
+            # --- SINGLE PDF PROCESSING ---
             else:
                 terminal.code(f"[SYS] Phase 1: Initiating {carrier} OCR Vision Engine...", language="bash")
                 file_bytes = BytesIO(uploaded_file.getvalue())
@@ -403,53 +364,7 @@ else:
                     "billed": billed, "savings": savings, "details": details
                 }
                 
-        if 'batch_result' in st.session_state and uploaded_file and uploaded_file.name.endswith('.zip'):
-            bres = st.session_state['batch_result']
-            
-            st.subheader("Batch Audit Summary")
-            df_show = bres['batch_df'].copy()
-            
-            def highlight_batch_error(row):
-                if row.get('Status') == 'Discrepancy': return ['background-color: #381E1E'] * len(row)
-                return [''] * len(row)
-                
-            st.table(df_show.style.apply(highlight_batch_error, axis=1))
-
-            if bres['total_savings'] > 0:
-                st.subheader("Auto-Generated Master Dispute")
-                disputed_count = len(df_show[df_show['Status'] == 'Discrepancy'])
-                
-                draft = f"Subject: URGENT: Consolidated SLA/Billing Discrepancy Notice - Batch {bres['batch_id']}\n\n"
-                draft += f"To Carrier Billing Department,\n\n"
-                draft += f"We are writing to formally dispute charges totaling ₹ {bres['total_savings']:,.2f} across {disputed_count} flagged invoices in our recent batch audit.\n\n"
-                draft += "Our automated LedgerFlux engine has identified violations based on our contracted rate cards and SLA agreements. Please review the attached Master Audit Certificate for the complete breakdown of affected invoices and expected savings.\n\n"
-                draft += "We expect a consolidated credit note issued for the disputed amount within 5 business days.\n\n"
-                draft += "Regards,\nLedgerFlux Automated Dispute System"
-                
-                st.text_area("Copy and send to carrier billing (or use Secure Mail below):", value=draft, height=200)
-
-            st.markdown("---")
-            st.subheader("Batch Export & Distribution")
-            html_report = bres.get('html_report', "")
-            
-            c4, c5 = st.columns(2)
-            with c4:
-                st.download_button("⬇️ Download Master Batch HTML Certificate", data=html_report, file_name=f"Batch_Audit_{bres['batch_id']}.html", mime="text/html", key="batch_download_btn")
-            with c5:
-                email = st.text_input("Corporate Email for Master Report:", key="batch_email_input")
-                if st.button("Send Batch via Secure Mail", key="batch_email_btn") and email:
-                    try:
-                        if 'lottie_email' in globals() and lottie_email: st_lottie(lottie_email, height=100, key="batch_mail_anim")
-                    except Exception: pass
-                    
-                    ok, msg = send_real_email(
-                        email, f"URGENT: Consolidated Batch Audit - {bres['batch_id']}", 
-                        "Please find the attached formal master audit certificate for the recent batch.", 
-                        html_content=html_report, filename=f"Batch_Audit_{bres['batch_id']}.html"
-                    )
-                    if ok: st.success("Batch Report Sent Successfully. We're done here.")
-                    else: st.error(f"Transmission failed: {msg}")
-
+        # --- PERSISTENT DISPLAY FOR SINGLE PDF ---
         if 'result' in st.session_state and st.session_state['result'] and uploaded_file and not uploaded_file.name.endswith('.zip'):
             res = st.session_state['result']
             st.success(f"Analysis Complete: {res['carrier']} Invoice {res['id']}")
