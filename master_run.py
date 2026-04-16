@@ -18,6 +18,10 @@ from supabase import create_client, Client
 # --- SUPABASE INIT ---
 @st.cache_resource
 def init_supabase():
+    # --- DIAGNOSTIC TRAP ---
+    st.error(f"The engine sees these exact keys: {list(st.secrets.keys())}")
+    # -----------------------
+    
     url = st.secrets["SUPABASE_URL"]
     key = st.secrets["SUPABASE_KEY"]
     return create_client(url, key)
