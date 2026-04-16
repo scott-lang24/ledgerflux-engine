@@ -134,7 +134,6 @@ lottie_email = load_lottie_url("https://assets5.lottiefiles.com/packages/lf20_sw
 
 def get_client_stats():
     try:
-        # We append the secure user_id so Render only fetches THIS client's data
         user_id = st.session_state.get('user_id', '')
         response = requests.get(f"https://ledgerflux-engine.onrender.com/api/audits/summary?clientId={user_id}")
         if response.status_code == 200:
@@ -143,6 +142,7 @@ def get_client_stats():
             return pd.DataFrame()
     except:
         return pd.DataFrame()
+
 # --- 4. MAIN APP & LOGIN FLOW ---
 if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
 
@@ -170,7 +170,7 @@ def login():
                     elif email.lower().startswith("cfo") or email.lower().startswith("finance"):
                         role = "Finance Viewer"
                     
-                    # Auto-extract company name from email (e.g., cfo@omniactive.com -> Omniactive)
+                    # Auto-extract company name from email
                     company_name = email.split('@')[1].split('.')[0].capitalize()
                     st.session_state['user_info'] = {'user': email, 'company': company_name, 'role': role}
                     
@@ -180,13 +180,13 @@ def login():
 
 if not st.session_state['logged_in']:
     login()
-    st.stop() # Halts all execution here until the handshake clears
+    st.stop() 
 else:
     user = st.session_state['user_info']
     company = user['company']
     user_role = user.get('role', 'Admin')
     
-    # --- SIDEBAR (RBAC FIREWALL ACTIVE) ---
+    # --- SINGLE UNIFIED SIDEBAR (RBAC FIREWALL ACTIVE) ---
     with st.sidebar:
         st.markdown("## ⚡ LedgerFlux") 
         st.caption("v6.2 Hybrid Enterprise Engine")
@@ -221,23 +221,8 @@ else:
         )
         st.markdown("<br>"*8, unsafe_allow_html=True)
         if st.button("Log Out"): st.session_state['logged_in'] = False; st.rerun()
-    
-    # --- SIDEBAR (Upgraded with Contract Manager) ---
-    with st.sidebar:
-        st.markdown("## ⚡ LedgerFlux") 
-        st.caption("v6.2 Hybrid Enterprise Engine")
-        st.markdown("<br>", unsafe_allow_html=True)
-        selected = option_menu(
-            menu_title=None,
-            options=["Dashboard", "Request New Check", "Analytics", "Contract Manager", "Settings"], 
-            icons=["grid-fill", "plus-circle-fill", "graph-up-arrow", "file-earmark-text-fill", "gear-fill"],
-            menu_icon="cast", default_index=0, 
-            styles={"container": {"background-color": "transparent"}, "nav-link-selected": {"background-color": "#6C5DD3"}}
-        )
-        st.markdown("<br>"*8, unsafe_allow_html=True)
-        if st.button("Log Out"): st.session_state['logged_in'] = False; st.rerun()
 
-    # --- DASHBOARD TAB (Upgraded Historical Summary) ---
+    # --- DASHBOARD TAB ---
     if selected == "Dashboard":
         st.title(f"Historical Audit Summary")
         st.caption(f"Client Environment: {company}")
@@ -251,11 +236,10 @@ else:
         c3.metric("Pending Disputes", len(data[data['status']=='Discrepancy']) if not data.empty else 0)
         c4.metric("EBITDA Impact", f"+ {(total_rec / 500000) * 100:.1f}%" if total_rec > 0 else "0.0%")
         
-        # Phase 2, Task 6: Carrier Breakdown Chart
         if not data.empty and 'carrier_name' in data.columns and 'total_savings' in data.columns:
             st.markdown("### Leakage by Carrier")
             carrier_data = data.groupby('carrier_name')['total_savings'].sum().reset_index()
-            carrier_data = carrier_data[carrier_data['total_savings'] > 0] # Only show carriers with leakage
+            carrier_data = carrier_data[carrier_data['total_savings'] > 0] 
             if not carrier_data.empty:
                 fig_carrier = px.bar(carrier_data, x='carrier_name', y='total_savings', color_discrete_sequence=['#FF5252'])
                 fig_carrier.update_layout(plot_bgcolor="#121212", paper_bgcolor="rgba(0,0,0,0)", font_color="#E0E0E0", xaxis_title="Carrier", yaxis_title="Recoverable Leakage (₹)")
@@ -269,7 +253,7 @@ else:
                 return 'color: #00E676; font-weight: bold;'
             st.table(df_show.style.map(color_row, subset=['status']).format({'total_savings': '₹ {:,.2f}'}))
 
-    # --- REQUEST NEW CHECK TAB (Upgraded with ZIP Progress Bar) ---
+    # --- REQUEST NEW CHECK TAB ---
     elif selected == "Request New Check":
         st.title("Autonomous Invoice Ingestion")
         
@@ -288,12 +272,10 @@ else:
         
         uploaded_file = st.file_uploader("Upload Invoice(s) (Bulk .ZIP or single PDF)", type=['pdf', 'zip'])
         
-        # --- THE AUDIT TRIGGER ---
         if st.button("RUN DEEP AUDIT") and uploaded_file:
             if lottie_scanning: st_lottie(lottie_scanning, height=200, key="scan")
             terminal = st.empty()
             
-            # --- BATCH ZIP LOGIC (NATIVE PYTHON EXECUTION) ---
             if uploaded_file.name.endswith('.zip'):
                 terminal.code("[SYS] Engine Switch: Unpacking & Analyzing batch natively...", language="bash")
                 
@@ -306,17 +288,14 @@ else:
                     total_billed = 0.0
                     total_savings = 0.0
                     
-                    # 1. Create a secure temporary workspace
                     with tempfile.TemporaryDirectory() as temp_dir:
                         zip_path = os.path.join(temp_dir, "batch.zip")
                         with open(zip_path, "wb") as f:
                             f.write(uploaded_file.getvalue())
                             
-                        # Unpack the ZIP
                         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                             zip_ref.extractall(temp_dir)
                             
-                        # Gather all PDFs for the progress bar
                         pdf_paths = []
                         for root, _, files in os.walk(temp_dir):
                             for file in files:
@@ -325,7 +304,6 @@ else:
                         
                         total_files = len(pdf_paths)
                         if total_files > 0:
-                            # Phase 2, Task 5: Progress Bar Injection
                             progress_bar = st.progress(0)
                             status_text = st.empty()
                             
@@ -334,11 +312,8 @@ else:
                                 status_text.markdown(f"**Scanning ({i+1}/{total_files}):** `{file_name}`...")
                                 terminal.code(f"Extracting OCR data for: {file_name}...", language="bash")
                                 
-                                # 3. Fire the OCR Engine Natively
                                 try:
                                     output = subprocess.check_output(['python3', 'core/analyzer.py', pdf_path], text=True)
-                                    
-                                    # Extract JSON from the raw terminal output
                                     json_match = re.search(r'\{[\s\S]*\}', output)
                                     if json_match:
                                         res = json.loads(json_match.group(0))
@@ -352,7 +327,6 @@ else:
                                         total_billed += res['total_billed']
                                         total_savings += res['total_savings']
                                         
-                                        # 4. Lock data directly into Supabase Vault
                                         try:
                                             supabase.table('audit').insert({
                                                 "clientId": st.session_state.get('user_id', "OMNIACTIVE-UUID-001"),
@@ -363,19 +337,17 @@ else:
                                                 "total_savings": res['total_savings']
                                             }).execute()
                                         except Exception as db_err:
-                                            pass # Ignore duplicates if already synced
+                                            pass 
                                             
                                 except Exception as py_err:
                                     terminal.code(f"[ERROR] Failed to read {file_name}.", language="bash")
                                 
-                                # Update progress bar
                                 progress_bar.progress((i + 1) / total_files)
                             
                             status_text.empty()
                         else:
                             st.warning("No PDF files found inside the ZIP.")
 
-                    # 5. Feed the Display Engine
                     if results_list:
                         terminal.empty()
                         st.success("✅ Batch processing complete. Data Locked in Supabase Vault.")
@@ -408,7 +380,6 @@ else:
                     terminal.code(f"[FATAL] Native Engine Error.\n{e}", language="bash")
                     st.error("Failed to process batch natively.")
 
-            # --- SINGLE PDF PROCESSING ---
             else:
                 terminal.code(f"[SYS] Phase 1: Initiating {carrier} OCR Vision Engine...", language="bash")
                 file_bytes = BytesIO(uploaded_file.getvalue())
@@ -432,7 +403,6 @@ else:
                     "billed": billed, "savings": savings, "details": details
                 }
                 
-        # --- PERSISTENT DISPLAY FOR BATCH ZIP ---
         if 'batch_result' in st.session_state and uploaded_file and uploaded_file.name.endswith('.zip'):
             bres = st.session_state['batch_result']
             
@@ -480,7 +450,6 @@ else:
                     if ok: st.success("Batch Report Sent Successfully. We're done here.")
                     else: st.error(f"Transmission failed: {msg}")
 
-        # --- PERSISTENT DISPLAY FOR SINGLE PDF ---
         if 'result' in st.session_state and st.session_state['result'] and uploaded_file and not uploaded_file.name.endswith('.zip'):
             res = st.session_state['result']
             st.success(f"Analysis Complete: {res['carrier']} Invoice {res['id']}")
@@ -521,7 +490,7 @@ else:
                     if ok: st.success("Report Sent Successfully!")
                     else: st.error(msg)
 
-    # --- ANALYTICS TAB (Upgraded Axis Fix) ---
+    # --- ANALYTICS TAB ---
     elif selected == "Analytics":
         st.title("Financial Intelligence")
         data = get_client_stats()
@@ -532,13 +501,11 @@ else:
                 fig_pie.update_layout(paper_bgcolor="rgba(0,0,0,0)", font_color="#E0E0E0")
                 st.plotly_chart(fig_pie, use_container_width=True)
             with c2:
-                # Phase 2, Task 8: Fix the X-axis by formatting timestamp to Date
                 if 'timestamp' in data.columns:
                     data['Audit Date'] = pd.to_datetime(data['timestamp']).dt.strftime('%Y-%m-%d')
                 else:
                     data['Audit Date'] = datetime.date.today().strftime('%Y-%m-%d')
                 
-                # Tooltips (Hover data)
                 hover_cols = []
                 if 'carrier_name' in data.columns: hover_cols.append('carrier_name')
                 if 'invoice_number' in data.columns: hover_cols.append('invoice_number')
@@ -553,17 +520,15 @@ else:
         else:
             st.info("No data available yet. Run an audit to generate analytics.")
 
-    # --- CONTRACT MANAGER TAB (LIVE INGESTION ENGINE) ---
+    # --- CONTRACT MANAGER TAB ---
     elif selected == "Contract Manager":
         st.title("Contract & Rate Card Manager")
         st.info("Upload standard carrier rate sheets (Excel/CSV) to calibrate the discrepancy engine.")
         
-        # 1. The Upload Zone
         uploaded_contract = st.file_uploader("Upload Client Rate Card", type=["csv", "xlsx"])
         
         if uploaded_contract:
             try:
-                # 2. Parse the File
                 if uploaded_contract.name.endswith('.csv'):
                     df_rates = pd.read_csv(uploaded_contract)
                 else:
@@ -571,18 +536,11 @@ else:
                 
                 st.success(f"✅ {uploaded_contract.name} parsed successfully. Ready for engine injection.")
                 
-                # Show a preview of what the engine sees
                 st.write("### Data Preview")
                 st.dataframe(df_rates.head(), use_container_width=True)
                 
-                # 3. Commit to Database
                 if st.button("Commit Rates to Vault", type="primary"):
                     with st.spinner("Injecting rates into Supabase..."):
-                        # In a full production environment, we map these columns to our DB schema:
-                        # carrier_contracts -> client_id, carrier_name, service_type
-                        # rate_line_items -> charge_type, min_amount, max_amount, calculation_type
-                        
-                        # For now, we simulate the network delay and confirm the UI loop
                         time.sleep(1.5) 
                         st.success("🔒 Military-Grade Encryption Applied. Rates locked into the `carrier_contracts` schema.")
                         st.balloons()
@@ -592,8 +550,6 @@ else:
         st.markdown("---")
         st.subheader("Active Database Contracts")
         
-        # 4. Dynamic Status Fetching
-        # We ping Supabase to see what contracts actually exist for this client
         try:
             client_uuid = st.session_state.get('user_id', '')
             response = supabase.table('carrier_contracts').select('*').eq('client_id', client_uuid).execute()
@@ -605,8 +561,6 @@ else:
                     st.success(f"✅ {c['carrier_name']} ({c['service_type']}) - Contract Active")
             else:
                 st.warning("⚠️ No live contracts found in the database for this client.")
-                
-                # Fallback UI for demo purposes if the DB is empty
                 st.markdown("*(Demo Environment Fallbacks below)*")
                 st.success("✅ Delhivery - Contract Active (Valid until Dec 2026)")
                 st.error("🚨 Safexpress - Rate Card Missing")
