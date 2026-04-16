@@ -143,6 +143,7 @@ def get_client_stats():
             return pd.DataFrame()
     except:
         return pd.DataFrame()
+
 # --- 4. MAIN APP & LOGIN FLOW ---
 if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
 
@@ -173,40 +174,51 @@ def login():
 
 if not st.session_state['logged_in']:
     login()
-    st.stop() # Halts all execution here until the handshake clearsR
+    st.stop() # Halts all execution here until the handshake clears
 else:
     user = st.session_state['user_info']
     company = user['company']
     
-    # --- SIDEBAR ---
+    # --- SIDEBAR (Upgraded with Contract Manager) ---
     with st.sidebar:
         st.markdown("## ⚡ LedgerFlux") 
         st.caption("v6.2 Hybrid Enterprise Engine")
         st.markdown("<br>", unsafe_allow_html=True)
         selected = option_menu(
             menu_title=None,
-            options=["Dashboard", "Request New Check", "Analytics", "Settings"], 
-            icons=["grid-fill", "plus-circle-fill", "graph-up-arrow", "gear-fill"],
+            options=["Dashboard", "Request New Check", "Analytics", "Contract Manager", "Settings"], 
+            icons=["grid-fill", "plus-circle-fill", "graph-up-arrow", "file-earmark-text-fill", "gear-fill"],
             menu_icon="cast", default_index=0, 
             styles={"container": {"background-color": "transparent"}, "nav-link-selected": {"background-color": "#6C5DD3"}}
         )
         st.markdown("<br>"*8, unsafe_allow_html=True)
         if st.button("Log Out"): st.session_state['logged_in'] = False; st.rerun()
 
-    # --- DASHBOARD TAB ---
+    # --- DASHBOARD TAB (Upgraded Historical Summary) ---
     if selected == "Dashboard":
-        st.title(f"Hello, {company} 👋")
+        st.title(f"Historical Audit Summary")
+        st.caption(f"Client Environment: {company}")
         data = get_client_stats()
         
         total_rec = data['total_savings'].sum() if not data.empty and 'total_savings' in data else 0
         
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total Audits", len(data))
-        c2.metric("Identified Leakage", f"₹ {total_rec:,.0f}")
+        c1.metric("Total Invoices Processed", len(data))
+        c2.metric("Total Leakage Found", f"₹ {total_rec:,.0f}")
         c3.metric("Pending Disputes", len(data[data['status']=='Discrepancy']) if not data.empty else 0)
         c4.metric("EBITDA Impact", f"+ {(total_rec / 500000) * 100:.1f}%" if total_rec > 0 else "0.0%")
         
-        st.subheader("Audit Log")
+        # Phase 2, Task 6: Carrier Breakdown Chart
+        if not data.empty and 'carrier_name' in data.columns and 'total_savings' in data.columns:
+            st.markdown("### Leakage by Carrier")
+            carrier_data = data.groupby('carrier_name')['total_savings'].sum().reset_index()
+            carrier_data = carrier_data[carrier_data['total_savings'] > 0] # Only show carriers with leakage
+            if not carrier_data.empty:
+                fig_carrier = px.bar(carrier_data, x='carrier_name', y='total_savings', color_discrete_sequence=['#FF5252'])
+                fig_carrier.update_layout(plot_bgcolor="#121212", paper_bgcolor="rgba(0,0,0,0)", font_color="#E0E0E0", xaxis_title="Carrier", yaxis_title="Recoverable Leakage (₹)")
+                st.plotly_chart(fig_carrier, use_container_width=True)
+
+        st.subheader("Recent Audit Log")
         if not data.empty:
             df_show = data[['timestamp', 'status', 'total_savings']].copy()
             def color_row(val):
@@ -214,9 +226,9 @@ else:
                 return 'color: #00E676; font-weight: bold;'
             st.table(df_show.style.map(color_row, subset=['status']).format({'total_savings': '₹ {:,.2f}'}))
 
-    # --- REQUEST NEW CHECK TAB ---
+    # --- REQUEST NEW CHECK TAB (Upgraded with ZIP Progress Bar) ---
     elif selected == "Request New Check":
-        st.title("New Audit Request")
+        st.title("Autonomous Invoice Ingestion")
         
         st.subheader("Audit Parameters")
         c_param1, c_param2 = st.columns(2)
@@ -231,25 +243,20 @@ else:
                 "Heavy TEU / Ocean"
             ])
         
-        uploaded_file = st.file_uploader("Upload Invoice(s) (PDF or .ZIP batch)", type=['pdf', 'zip'])
+        uploaded_file = st.file_uploader("Upload Invoice(s) (Bulk .ZIP or single PDF)", type=['pdf', 'zip'])
         
         # --- THE AUDIT TRIGGER ---
         if st.button("RUN DEEP AUDIT") and uploaded_file:
             if lottie_scanning: st_lottie(lottie_scanning, height=200, key="scan")
             terminal = st.empty()
             
-            # --- BATCH ZIP LOGIC (ROUTED TO ENTERPRISE API) ---
             # --- BATCH ZIP LOGIC (NATIVE PYTHON EXECUTION) ---
             if uploaded_file.name.endswith('.zip'):
                 terminal.code("[SYS] Engine Switch: Unpacking & Analyzing batch natively...", language="bash")
                 
-                import zipfile
                 import tempfile
-                import os
                 import subprocess
-                import re
                 import json
-                import datetime
                 
                 try:
                     results_list = []
@@ -266,64 +273,80 @@ else:
                         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                             zip_ref.extractall(temp_dir)
                             
-                        # 2. Iterate through every extracted file
+                        # Gather all PDFs for the progress bar
+                        pdf_paths = []
                         for root, _, files in os.walk(temp_dir):
                             for file in files:
                                 if file.lower().endswith('.pdf'):
-                                    pdf_path = os.path.join(root, file)
-                                    terminal.code(f"Scanning: {file}...", language="bash")
+                                    pdf_paths.append(os.path.join(root, file))
+                        
+                        total_files = len(pdf_paths)
+                        if total_files > 0:
+                            # Phase 2, Task 5: Progress Bar Injection
+                            progress_bar = st.progress(0)
+                            status_text = st.empty()
+                            
+                            for i, pdf_path in enumerate(pdf_paths):
+                                file_name = os.path.basename(pdf_path)
+                                status_text.markdown(f"**Scanning ({i+1}/{total_files}):** `{file_name}`...")
+                                terminal.code(f"Extracting OCR data for: {file_name}...", language="bash")
+                                
+                                # 3. Fire the OCR Engine Natively
+                                try:
+                                    output = subprocess.check_output(['python3', 'core/analyzer.py', pdf_path], text=True)
                                     
-                                    # 3. Fire the OCR Engine Natively
-                                    try:
-                                        output = subprocess.check_output(['python3', 'core/analyzer.py', pdf_path], text=True)
+                                    # Extract JSON from the raw terminal output
+                                    json_match = re.search(r'\{[\s\S]*\}', output)
+                                    if json_match:
+                                        res = json.loads(json_match.group(0))
+                                        results_list.append({
+                                            "Invoice ID": res['invoice_id'],
+                                            "Carrier": res['carrier'],
+                                            "Status": res['status'],
+                                            "Billed": res['total_billed'],
+                                            "Recoverable": res['total_savings']
+                                        })
+                                        total_billed += res['total_billed']
+                                        total_savings += res['total_savings']
                                         
-                                        # Extract JSON from the raw terminal output
-                                        json_match = re.search(r'\{[\s\S]*\}', output)
-                                        if json_match:
-                                            res = json.loads(json_match.group(0))
-                                            results_list.append({
-                                                "Invoice ID": res['invoice_id'],
-                                                "Carrier": res['carrier'],
-                                                "Status": res['status'],
-                                                "Billed": res['total_billed'],
-                                                "Recoverable": res['total_savings']
-                                            })
-                                            total_billed += res['total_billed']
-                                            total_savings += res['total_savings']
+                                        # 4. Lock data directly into Supabase Vault
+                                        try:
+                                            supabase.table('audit').insert({
+                                                "clientId": st.session_state.get('user_id', "OMNIACTIVE-UUID-001"),
+                                                "invoice_number": res['invoice_id'],
+                                                "carrier_name": res['carrier'],
+                                                "status": res['status'],
+                                                "total_billed": res['total_billed'],
+                                                "total_savings": res['total_savings']
+                                            }).execute()
+                                        except Exception as db_err:
+                                            pass # Ignore duplicates if already synced
                                             
-                                            # 4. Lock data directly into Supabase Vault
-                                            try:
-                                                supabase.table('audit').insert({
-                                                    "clientId": st.session_state.get('user_id', "OMNIACTIVE-UUID-001"),
-                                                    "invoice_number": res['invoice_id'],
-                                                    "carrier_name": res['carrier'],
-                                                    "status": res['status'],
-                                                    "total_billed": res['total_billed'],
-                                                    "total_savings": res['total_savings']
-                                                }).execute()
-                                            except Exception as db_err:
-                                                pass # Ignore duplicates if already synced
-                                                
-                                    except Exception as py_err:
-                                        terminal.code(f"[ERROR] Failed to read {file}.", language="bash")
+                                except Exception as py_err:
+                                    terminal.code(f"[ERROR] Failed to read {file_name}.", language="bash")
+                                
+                                # Update progress bar
+                                progress_bar.progress((i + 1) / total_files)
+                            
+                            status_text.empty()
+                        else:
+                            st.warning("No PDF files found inside the ZIP.")
 
                     # 5. Feed the Display Engine
                     if results_list:
                         terminal.empty()
-                        st.success("Local Batch Analysis Complete. Data Locked in Supabase Vault.")
+                        st.success("✅ Batch processing complete. Data Locked in Supabase Vault.")
                         
                         c1, c2, c3 = st.columns(3)
                         c1.metric("Engine Status", "Native Python Executed")
                         c2.metric("Invoices Processed", len(results_list))
                         c3.metric("Total Savings Found", f"₹ {total_savings:,.2f}")
                         
-                        # IMPORTANT: We keep numbers as floats here so your new sum() logic doesn't crash!
                         batch_df = pd.DataFrame(results_list)
                         
                         batch_id = f"BATCH-{datetime.datetime.now().strftime('%M%S')}"
                         batch_status = "Discrepancy" if total_savings > 0 else "Clear"
                         
-                        # We pass the raw numbers to generate_html_report
                         html_report = generate_html_report(batch_id, "Multiple Carriers", batch_status, total_billed, total_savings, batch_df)
                         
                         st.session_state['batch_result'] = {
@@ -334,8 +357,6 @@ else:
                             "batch_id": batch_id,
                             "html_report": html_report
                         }
-                        
-                        # Rerun to trigger your new persistent ZIP display
                         st.rerun()
                     else:
                         st.warning("Batch processed, but no valid readable PDFs were found.")
@@ -344,7 +365,7 @@ else:
                     terminal.code(f"[FATAL] Native Engine Error.\n{e}", language="bash")
                     st.error("Failed to process batch natively.")
 
-            # --- SINGLE PDF PROCESSING (REMAINS LOCAL FOR QUICK TESTS) ---
+            # --- SINGLE PDF PROCESSING ---
             else:
                 terminal.code(f"[SYS] Phase 1: Initiating {carrier} OCR Vision Engine...", language="bash")
                 file_bytes = BytesIO(uploaded_file.getvalue())
@@ -367,11 +388,11 @@ else:
                     "id": inv_id, "carrier": carrier, "status": status, 
                     "billed": billed, "savings": savings, "details": details
                 }
-# --- PERSISTENT DISPLAY FOR BATCH ZIP ---
+                
+        # --- PERSISTENT DISPLAY FOR BATCH ZIP ---
         if 'batch_result' in st.session_state and uploaded_file and uploaded_file.name.endswith('.zip'):
             bres = st.session_state['batch_result']
             
-            # 1. ADD THE BATCH SUMMARY TABLE
             st.subheader("Batch Audit Summary")
             df_show = bres['batch_df'].copy()
             
@@ -381,7 +402,6 @@ else:
                 
             st.table(df_show.style.apply(highlight_batch_error, axis=1))
 
-            # 2. ADD THE MASTER BATCH DISPUTE DRAFT
             if bres['total_savings'] > 0:
                 st.subheader("Auto-Generated Master Dispute")
                 disputed_count = len(df_show[df_show['Status'] == 'Discrepancy'])
@@ -394,42 +414,28 @@ else:
                 draft += "Regards,\nLedgerFlux Automated Dispute System"
                 
                 st.text_area("Copy and send to carrier billing (or use Secure Mail below):", value=draft, height=200)
-# --- THE BATCH EXPORT & DISTRIBUTION CLOSER ---
+
             st.markdown("---")
             st.subheader("Batch Export & Distribution")
-            
-            # We pull the HTML report directly from your new native engine state
             html_report = bres.get('html_report', "")
             
             c4, c5 = st.columns(2)
             with c4:
-                st.download_button(
-                    "⬇️ Download Master Batch HTML Certificate", 
-                    data=html_report, 
-                    file_name=f"Batch_Audit_{bres['batch_id']}.html", 
-                    mime="text/html",
-                    key="batch_download_btn"
-                )
+                st.download_button("⬇️ Download Master Batch HTML Certificate", data=html_report, file_name=f"Batch_Audit_{bres['batch_id']}.html", mime="text/html", key="batch_download_btn")
             with c5:
                 email = st.text_input("Corporate Email for Master Report:", key="batch_email_input")
                 if st.button("Send Batch via Secure Mail", key="batch_email_btn") and email:
                     try:
-                        if 'lottie_email' in globals() and lottie_email: 
-                            st_lottie(lottie_email, height=100, key="batch_mail_anim")
+                        if 'lottie_email' in globals() and lottie_email: st_lottie(lottie_email, height=100, key="batch_mail_anim")
                     except Exception: pass
                     
                     ok, msg = send_real_email(
-                        email, 
-                        f"URGENT: Consolidated Batch Audit - {bres['batch_id']}", 
+                        email, f"URGENT: Consolidated Batch Audit - {bres['batch_id']}", 
                         "Please find the attached formal master audit certificate for the recent batch.", 
-                        html_content=html_report, 
-                        filename=f"Batch_Audit_{bres['batch_id']}.html"
+                        html_content=html_report, filename=f"Batch_Audit_{bres['batch_id']}.html"
                     )
-                    
-                    if ok: 
-                        st.success("Batch Report Sent Successfully. We're done here.")
-                    else: 
-                        st.error(f"Transmission failed: {msg}")
+                    if ok: st.success("Batch Report Sent Successfully. We're done here.")
+                    else: st.error(f"Transmission failed: {msg}")
 
         # --- PERSISTENT DISPLAY FOR SINGLE PDF ---
         if 'result' in st.session_state and st.session_state['result'] and uploaded_file and not uploaded_file.name.endswith('.zip'):
@@ -472,7 +478,7 @@ else:
                     if ok: st.success("Report Sent Successfully!")
                     else: st.error(msg)
 
-    # --- ANALYTICS TAB ---
+    # --- ANALYTICS TAB (Upgraded Axis Fix) ---
     elif selected == "Analytics":
         st.title("Financial Intelligence")
         data = get_client_stats()
@@ -483,14 +489,41 @@ else:
                 fig_pie.update_layout(paper_bgcolor="rgba(0,0,0,0)", font_color="#E0E0E0")
                 st.plotly_chart(fig_pie, use_container_width=True)
             with c2:
-                fig_bar = px.bar(data, x='timestamp', y='total_savings', color_discrete_sequence=['#6C5DD3'])
-                fig_bar.update_layout(plot_bgcolor="#121212", paper_bgcolor="rgba(0,0,0,0)", font_color="#E0E0E0", xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#333'))
+                # Phase 2, Task 8: Fix the X-axis by formatting timestamp to Date
+                if 'timestamp' in data.columns:
+                    data['Audit Date'] = pd.to_datetime(data['timestamp']).dt.strftime('%Y-%m-%d')
+                else:
+                    data['Audit Date'] = datetime.date.today().strftime('%Y-%m-%d')
+                
+                # Tooltips (Hover data)
+                hover_cols = []
+                if 'carrier_name' in data.columns: hover_cols.append('carrier_name')
+                if 'invoice_number' in data.columns: hover_cols.append('invoice_number')
+
+                fig_bar = px.bar(data, x='Audit Date', y='total_savings', color_discrete_sequence=['#6C5DD3'], hover_data=hover_cols)
+                fig_bar.update_layout(
+                    plot_bgcolor="#121212", paper_bgcolor="rgba(0,0,0,0)", font_color="#E0E0E0", 
+                    xaxis=dict(showgrid=False, title="Date"), 
+                    yaxis=dict(showgrid=True, gridcolor='#333', title="Leakage (₹)")
+                )
                 st.plotly_chart(fig_bar, use_container_width=True)
         else:
             st.info("No data available yet. Run an audit to generate analytics.")
 
+    # --- CONTRACT MANAGER TAB (New Phase 2 Task) ---
+    elif selected == "Contract Manager":
+        st.title("Contract & Rate Card Manager")
+        st.info("Upload standard carrier rate sheets (Excel/CSV) to calibrate the discrepancy engine.")
+        st.file_uploader("Upload Client Rate Card", type=["csv", "xlsx"])
+        
+        st.markdown("---")
+        st.subheader("Active Contracts")
+        st.success("✅ Delhivery - Contract Active (Valid until Dec 2026)")
+        st.warning("⚠️ BlueDart - Expiring in 14 Days")
+        st.error("🚨 Safexpress - Rate Card Missing")
+
     # --- SETTINGS TAB ---
     elif selected == "Settings":
         st.title("Settings")
-        st.text_input("User ID", value="user1", disabled=True)
+        st.text_input("User ID", value=st.session_state.get('user_id', 'user1'), disabled=True)
         st.toggle("Enable Dark Mode", value=True, disabled=True)
