@@ -144,9 +144,6 @@ def get_client_stats():
     except:
         return pd.DataFrame()
 
-# --- 4. MAIN APP & LOGIN FLOW ---
-if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
-
 def login():
     c1, c2, c3 = st.columns([1, 1, 1])
     with c2:
@@ -164,9 +161,16 @@ def login():
                     st.session_state['logged_in'] = True
                     st.session_state['user_id'] = auth_response.user.id
                     
+                    # 1. RBAC Engine: Auto-Assign Roles based on email syntax
+                    role = "Admin" # Default God Mode
+                    if email.lower().startswith("ops") or email.lower().startswith("warehouse"):
+                        role = "Ops Uploader"
+                    elif email.lower().startswith("cfo") or email.lower().startswith("finance"):
+                        role = "Finance Viewer"
+                    
                     # Auto-extract company name from email (e.g., cfo@omniactive.com -> Omniactive)
                     company_name = email.split('@')[1].split('.')[0].capitalize()
-                    st.session_state['user_info'] = {'user': email, 'company': company_name}
+                    st.session_state['user_info'] = {'user': email, 'company': company_name, 'role': role}
                     
                     st.rerun()
                 except Exception as e:
@@ -178,6 +182,43 @@ if not st.session_state['logged_in']:
 else:
     user = st.session_state['user_info']
     company = user['company']
+    user_role = user.get('role', 'Admin')
+    
+    # --- SIDEBAR (RBAC FIREWALL ACTIVE) ---
+    with st.sidebar:
+        st.markdown("## ⚡ LedgerFlux") 
+        st.caption("v6.2 Hybrid Enterprise Engine")
+        
+        # Display the user's security clearance
+        if user_role == "Admin":
+            st.error("🟢 Clearance: Admin (God Mode)")
+        elif user_role == "Finance Viewer":
+            st.info("🔵 Clearance: Finance Viewer")
+        else:
+            st.warning("🟠 Clearance: Ops Uploader")
+            
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # 2. RBAC Engine: Dynamic Menu Routing
+        if user_role == "Ops Uploader":
+            nav_options = ["Request New Check", "Settings"]
+            nav_icons = ["plus-circle-fill", "gear-fill"]
+        elif user_role == "Finance Viewer":
+            nav_options = ["Dashboard", "Analytics", "Contract Manager", "Settings"]
+            nav_icons = ["grid-fill", "graph-up-arrow", "file-earmark-text-fill", "gear-fill"]
+        else: # Admin gets everything
+            nav_options = ["Dashboard", "Request New Check", "Analytics", "Contract Manager", "Settings"]
+            nav_icons = ["grid-fill", "plus-circle-fill", "graph-up-arrow", "file-earmark-text-fill", "gear-fill"]
+
+        selected = option_menu(
+            menu_title=None,
+            options=nav_options, 
+            icons=nav_icons,
+            menu_icon="cast", default_index=0, 
+            styles={"container": {"background-color": "transparent"}, "nav-link-selected": {"background-color": "#6C5DD3"}}
+        )
+        st.markdown("<br>"*8, unsafe_allow_html=True)
+        if st.button("Log Out"): st.session_state['logged_in'] = False; st.rerun()
     
     # --- SIDEBAR (Upgraded with Contract Manager) ---
     with st.sidebar:
