@@ -44,6 +44,10 @@ def background_processor(file_bytes, client_id, filename):
         print(f"[FATAL] Webhook Ghost Worker Crashed: {e}")
 
 # --- 3. THE SENDGRID INBOUND PARSE ENDPOINT ---
+@app.get("/")
+def health_check():
+    return {"status": "🟢 LedgerFlux Webhook Catcher is Online and Listening."}
+
 @app.post("/api/webhooks/inbound_email")
 async def handle_inbound_email(
     request: Request,
