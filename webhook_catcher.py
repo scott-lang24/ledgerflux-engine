@@ -1,87 +1,93 @@
-from fastapi import FastAPI, Request, File, UploadFile, Form
-from supabase import create_client
-import tempfile
-import subprocess
-import json
 import os
-import threading
-import datetime
+import shutil
+from fastapi import FastAPI, Request, File, UploadFile, Form, BackgroundTasks
+import requests
+import uvicorn
 
-# --- 1. INITIALIZE FASTAPI & SUPABASE ---
-app = FastAPI(title="LedgerFlux Inbound Email Webhook")
+app = FastAPI(title="LedgerFlux Inbound Gateway")
 
-# (In production, load these securely via environment variables like we did in Streamlit)
-SUPABASE_URL = os.getenv("SUPABASE_URL","https://dnxmlcrivhlrhjttuepj.supabase.co")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY","eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRueG1sY3JpdmhscmhqdHR1ZXBqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3MzE2NTMsImV4cCI6MjA5MTMwNzY1M30.tV_kVUjbdxADZGUQnsGWpnQstWw0OR2565xcVQ-k3_8")
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-# --- 2. THE GHOST WORKER (Reused from Phase 4) ---
-def background_processor(file_bytes, client_id, filename):
-    try:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            pdf_path = os.path.join(temp_dir, filename)
-            with open(pdf_path, "wb") as f:
-                f.write(file_bytes)
-                
-            # Fire the LedgerFlux OCR Engine natively
-            output = subprocess.check_output(['python3', 'core/analyzer.py', pdf_path], text=True)
-            json_match = re.search(r'\{[\s\S]*\}', output)
-            
-            if json_match:
-                res = json.loads(json_match.group(0))
-                
-                # Lock data into the Vault silently
-                supabase.table('audit').insert({
-                    "clientId": client_id,
-                    "invoice_number": res['invoice_id'],
-                    "carrier_name": res['carrier'],
-                    "status": res['status'],
-                    "total_billed": res['total_billed'],
-                    "total_savings": res['total_savings']
-                }).execute()
-                print(f"[SUCCESS] Inbound Email Invoice {res['invoice_id']} audited and secured.")
-    except Exception as e:
-        print(f"[FATAL] Webhook Ghost Worker Crashed: {e}")
-
-# --- 3. THE SENDGRID INBOUND PARSE ENDPOINT ---
-@app.get("/")
-def health_check():
-    return {"status": "🟢 LedgerFlux Webhook Catcher is Online and Listening."}
-
-@app.post("/api/webhooks/inbound_email")
-async def handle_inbound_email(
+@app.post("/inbound-parse")
+async def receive_inbound_email(
+    background_tasks: BackgroundTasks,
     request: Request,
-    to: str = Form(...),          # Who the email was sent to (e.g., omniactive@ledgerflux.com)
-    from_email: str = Form(alias="from"), # The carrier's email
-    attachments: int = Form(0)    # Number of attachments
+    to: str = Form(...),
+    From: str = Form(...),  # SendGrid uses capital 'From'
+    subject: str = Form(None)
 ):
-    """
-    SendGrid hits this endpoint the second an email arrives.
-    """
-    print(f"[SYS] Intercepted email from {from_email} to {to}")
-    
-    # 1. Routing: Figure out which client this belongs to based on the email address
-    client_prefix = to.split('@')[0].upper() # e.g., 'omniactive' -> 'OMNIACTIVE'
-    client_uuid = f"{client_prefix}-UUID-001" # In production, look this up in the DB
-    
-    # 2. Extract the PDF attachments
     form_data = await request.form()
     
-    if attachments > 0:
-        for i in range(1, attachments + 1):
-            file_field = f"attachment{i}"
-            if file_field in form_data:
-                upload_file = form_data[file_field]
-                if upload_file.filename.lower().endswith('.pdf'):
-                    file_bytes = await upload_file.read()
-                    
-                    # 3. Hand off to the ghost worker so the API responds instantly
-                    thread = threading.Thread(
-                        target=background_processor, 
-                        args=(file_bytes, client_uuid, upload_file.filename)
-                    )
-                    thread.start()
-                    
-        return {"status": "success", "message": f"Routed {attachments} attachments to Ghost Workers."}
+    # SendGrid dynamically labels attachments as 'attachment1', 'attachment2', etc.
+    attachments = [value for key, value in form_data.items() if key.startswith('attachment') and isinstance(value, UploadFile)]
     
-    return {"status": "ignored", "message": "No attachments found."}
+    sender_email = From
+    print(f"[+] INCOMING ALERT: Audit Request intercepted from {sender_email}")
+    print(f"[+] Payloads detected: {len(attachments)} files")
+
+    if not attachments:
+        return {"status": "ignored", "reason": "No PDF attached"}
+
+    # We process the first attachment (The Carrier Invoice)
+    file_obj = attachments[0]
+    
+    if not file_obj.filename.lower().endswith(".pdf"):
+        return {"status": "ignored", "reason": "Target is not a PDF format"}
+
+    # Secure the payload in a temporary directory
+    temp_dir = "temp_inbound"
+    os.makedirs(temp_dir, exist_ok=True)
+    temp_path = os.path.join(temp_dir, file_obj.filename)
+    
+    with open(temp_path, "wb") as buffer:
+        shutil.copyfileobj(file_obj.file, buffer)
+
+    # Hand off to the core engine in the background to prevent SendGrid timeout
+    background_tasks.add_task(execute_forensic_audit, temp_path, sender_email)
+
+    return {"status": "received", "message": "Payload secured. LedgerFlux engine engaging."}
+
+
+def execute_forensic_audit(file_path: str, sender_email: str):
+    """
+    The Brain Connection: Where Webhook meets SCAM_DATABASE
+    """
+    print(f"[*] Initiating Deep Scan on {file_path} for {sender_email}...")
+    
+    # TODO: Import your analyzer.py or master_run.py OCR logic here.
+    # Example: result = ocr_engine.process_invoice(file_path)
+    
+    # MOCK RESULT FOR V1 TESTING
+    audit_result = {
+        "discrepancy_found": True,
+        "leakage_amount": "$430.00",
+        "reason": "Dimensional Weight Bloat (Carrier billed 150 lbs, actual DIM is 112 lbs)",
+        "carrier": "FedEx",
+        "invoice_ref": file_path.split("/")[-1]
+    }
+
+    # FIRING THE NODE.JS EMAIL CANNON
+    print("[*] Scan complete. Triggering Node.js Dispatcher for HTML Certificate...")
+    
+    # NOTE: Change this to your Render Node.js URL when deploying
+    node_api_url = "http://localhost:3000/api/dispatch-certificate" 
+    
+    payload = {
+        "to_email": sender_email,
+        "audit_data": audit_result
+    }
+    
+    try:
+        response = requests.post(node_api_url, json=payload)
+        if response.status_code == 200:
+            print("[+] HTML Dispute Certificate fired back to client successfully.")
+        else:
+            print(f"[-] Node API returned status: {response.status_code}")
+    except Exception as e:
+        print(f"[-] Node API Connection Failed: {e}")
+
+    # Burn the evidence
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        print("[*] Temp payload deleted.")
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
