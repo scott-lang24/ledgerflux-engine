@@ -4,7 +4,52 @@ import random
 import re
 import pdfplumber
 import warnings
+import zipfile
+import io
+from fastapi import UploadFile
 warnings.filterwarnings("ignore")
+
+async def process_bulk_zip(zip_file: UploadFile, tenant_id: str):
+    """
+    Enterprise Bulk Extractor: Unpacks ZIP in memory, routes PDFs to OCR.
+    """
+    print(f"[*] Initiating Bulk ZIP Extraction for Tenant: {tenant_id}")
+    contents = await zip_file.read()
+    
+    total_leakage = 0.0
+    discrepancies_found = []
+    
+    with zipfile.ZipFile(io.BytesIO(contents)) as archive:
+        for file_name in archive.namelist():
+            # Skip hidden macOS files or non-PDFs
+            if not file_name.lower().endswith('.pdf') or file_name.startswith('__MACOSX'):
+                continue
+                
+            print(f"[*] Scanning embedded document: {file_name}")
+            
+            with archive.open(file_name) as pdf_file:
+                pdf_bytes = pdf_file.read()
+                
+                # TODO: Pass pdf_bytes directly to your OCR engine
+                # mock_result = ocr_engine.scan_bytes(pdf_bytes)
+                
+                # MOCK LOGIC FOR TESTING
+                mock_leakage = 150.00 # Assume we found $150 leakage in this PDF
+                total_leakage += mock_leakage
+                
+                discrepancies_found.append({
+                    "invoice": file_name,
+                    "leakage": f"${mock_leakage}",
+                    "reason": "SLA Thermal Breach"
+                })
+
+    print(f"[+] Bulk Scan Complete. Total Leakage Found: ${total_leakage}")
+    return {
+        "files_scanned": len(discrepancies_found),
+        "total_leakage_recovered": f"${total_leakage}",
+        "details": discrepancies_found
+    }
+
 
 # The Universal Scam Database
 SCAM_DATABASE = {
