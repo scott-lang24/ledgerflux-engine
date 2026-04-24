@@ -1,61 +1,30 @@
 import requests
-import os
 
-# 1. LOCAL CONFIG
-WEBHOOK_URL = "http://localhost:8000/inbound-parse"
-FILENAME = "sample_invoice.pdf"
+# Using 127.0.0.1 bypasses any weird 'localhost' DNS resolution issues
+URL = "http://127.0.0.1:8000/inbound-parse"
+TEST_FILE = "STARK_OVERRIDE_TEST.pdf"
 
-def find_the_target():
-    # Diagnostic: Where are we?
-    current_dir = os.getcwd()
-    print(f"[*] Current Command Center: {current_dir}")
-    
-    # Check current folder
-    if os.path.exists(FILENAME):
-        return FILENAME
-    
-    # Check if we are outside the LedgerFlux folder
-    alt_path = os.path.join(current_dir, "LedgerFlux", FILENAME)
-    if os.path.exists(alt_path):
-        return alt_path
+# 1. WE BUILD THE FILE ON THE FLY. Zero chance of "File Not Found".
+with open(TEST_FILE, "wb") as f:
+    f.write(b"%PDF-1.4\n%This is a guaranteed Stark Industries payload.")
+print(f"[*] Asset forged: {TEST_FILE}")
 
-    # Check for common subfolders
-    for root, dirs, files in os.walk(current_dir):
-        if FILENAME in files:
-            return os.path.join(root, FILENAME)
-            
-    return None
+# 2. ASSEMBLE THE PAYLOAD
+data = {
+    "to": "audit@ledgerflux.com",
+    "From": "tony@starkindustries.com"
+}
 
-def fire_payload():
-    target_path = find_the_target()
-    
-    if not target_path:
-        print(f"[!] CRITICAL FAILURE: {FILENAME} is missing from the mainframe.")
-        print("[*] Creating a dummy file to bypass...")
-        target_path = FILENAME
-        with open(target_path, "wb") as f:
-            f.write(b"%PDF-1.1\n%Stark-Dummy-Invoice")
-
-    print(f"[+] Target Locked: {target_path}")
-
-    payload_fields = {
-        "to": "audit@ledgerflux.com",
-        "From": "stark@starkindustries.com",
-        "subject": "Q3 Forensic Audit"
-    }
-
-    with open(target_path, "rb") as f:
-        # We MUST ensure the key is 'attachment1' to match the Webhook Greedy Logic
-        files = {
-            "attachment1": (FILENAME, f, "application/pdf")
-        }
-
-        print(f"[*] Firing Payload...")
-        try:
-            r = requests.post(WEBHOOK_URL, data=payload_fields, files=files)
-            print(f"[+] Webhook Response: {r.json()}")
-        except Exception as e:
-            print(f"[-] Handshake Failed: {e}")
-
-if __name__ == "__main__":
-    fire_payload()
+# 3. FIRE THE MISSILE
+try:
+    with open(TEST_FILE, "rb") as f:
+        # The key MUST be 'attachment1' to match the FastAPI parameter
+        files = {"attachment1": (TEST_FILE, f, "application/pdf")}
+        
+        print("[*] Initiating override transmission...")
+        response = requests.post(URL, data=data, files=files)
+        
+        print(f"[+] Server Response Code: {response.status_code}")
+        print(f"[+] Server JSON: {response.json()}")
+except Exception as e:
+    print(f"[-] Transmission Failure: {e}")
