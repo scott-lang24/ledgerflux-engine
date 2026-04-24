@@ -10,24 +10,37 @@ app = FastAPI(title="LedgerFlux Inbound Gateway")
 async def receive_inbound_email(
     background_tasks: BackgroundTasks,
     request: Request,
-    to: str = Form(...),
-    From: str = Form(...),
+    to: str = Form(None),
+    From: str = Form(None),
 ):
+    # This is the "Stark Protocol" - catch everything, ask questions later.
     form_data = await request.form()
-    
-    # Check for files in both 'attachmentX' format AND standard 'files' format
     attachments = []
-    for key, value in form_data.items():
+
+    # Greedy search for any UploadFile object in the form data
+    for key in form_data:
+        value = form_data[key]
         if isinstance(value, UploadFile):
             attachments.append(value)
-    
-    sender_email = From
-    print(f"[+] INCOMING ALERT: Audit intercepted from {sender_email}")
-    print(f"[+] Files detected in stream: {len(attachments)}")
+            print(f"[+] Found file in field: {key}")
+
+    sender_email = From if From else "unknown@client.com"
+    print(f"[+] INCOMING: Audit from {sender_email} | Files: {len(attachments)}")
 
     if not attachments:
-        return {"status": "ignored", "reason": "No files found in multipart stream"}
+        return {"status": "error", "reason": "Handshake failed: No file detected in stream"}
 
+    file_obj = attachments[0]
+    temp_dir = "temp_inbound"
+    os.makedirs(temp_dir, exist_ok=True)
+    temp_path = os.path.join(temp_dir, file_obj.filename)
+    
+    with open(temp_path, "wb") as buffer:
+        shutil.copyfileobj(file_obj.file, buffer)
+
+    background_tasks.add_task(execute_forensic_audit, temp_path, sender_email)
+
+    return {"status": "received", "message": f"Engine engaging on {file_obj.filename}"}
     file_obj = attachments[0]
     
     # Ensure directory exists
