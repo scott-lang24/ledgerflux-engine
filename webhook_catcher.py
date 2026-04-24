@@ -1,124 +1,39 @@
 import os
 import shutil
-from fastapi import FastAPI, Request, File, UploadFile, Form, BackgroundTasks
-import requests
+from fastapi import FastAPI, File, UploadFile, Form
 import uvicorn
 
-app = FastAPI(title="LedgerFlux Inbound Gateway")
+app = FastAPI()
 
 @app.post("/inbound-parse")
 async def receive_inbound_email(
-    background_tasks: BackgroundTasks,
-    request: Request,
     to: str = Form(None),
     From: str = Form(None),
+    attachment1: UploadFile = File(...) # The ... makes it strictly required
 ):
-    # This is the "Stark Protocol" - catch everything, ask questions later.
-    form_data = await request.form()
-    attachments = []
+    print("\n[>>>] INCOMING SECURE PAYLOAD [<<<]")
+    print(f"[*] Sender detected: {From}")
+    
+    if not attachment1:
+        print("[-] FATAL ERROR: attachment1 is completely missing from the stream.")
+        return {"status": "failed", "reason": "No file stream received"}
 
-    # Greedy search for any UploadFile object in the form data
-    for key in form_data:
-        value = form_data[key]
-        if isinstance(value, UploadFile):
-            attachments.append(value)
-            print(f"[+] Found file in field: {key}")
-
-    sender_email = From if From else "unknown@client.com"
-    print(f"[+] INCOMING: Audit from {sender_email} | Files: {len(attachments)}")
-
-    if not attachments:
-        return {"status": "error", "reason": "Handshake failed: No file detected in stream"}
-
-    file_obj = attachments[0]
+    print(f"[+] File Detected in stream: {attachment1.filename}")
+    
+    # Secure the file
     temp_dir = "temp_inbound"
     os.makedirs(temp_dir, exist_ok=True)
-    temp_path = os.path.join(temp_dir, file_obj.filename)
+    temp_path = os.path.join(temp_dir, attachment1.filename)
     
     with open(temp_path, "wb") as buffer:
-        shutil.copyfileobj(file_obj.file, buffer)
+        shutil.copyfileobj(attachment1.file, buffer)
 
-    background_tasks.add_task(execute_forensic_audit, temp_path, sender_email)
-
-    return {"status": "received", "message": f"Engine engaging on {file_obj.filename}"}
-    file_obj = attachments[0]
+    print(f"[+] Payload secured at {temp_path}. Handshake Complete.")
     
-    # Ensure directory exists
-    temp_dir = "temp_inbound"
-    if not os.path.exists(temp_dir):
-        os.makedirs(temp_dir)
-        
-    temp_path = os.path.join(temp_dir, file_obj.filename)
-    
-    with open(temp_path, "wb") as buffer:
-        shutil.copyfileobj(file_obj.file, buffer)
-
-    background_tasks.add_task(execute_forensic_audit, temp_path, sender_email)
-
-    return {"status": "received", "message": f"LedgerFlux Engine engaging on {file_obj.filename}"}
-
-    # We process the first attachment (The Carrier Invoice)
-    file_obj = attachments[0]
-    
-    if not file_obj.filename.lower().endswith(".pdf"):
-        return {"status": "ignored", "reason": "Target is not a PDF format"}
-
-    # Secure the payload in a temporary directory
-    temp_dir = "temp_inbound"
-    os.makedirs(temp_dir, exist_ok=True)
-    temp_path = os.path.join(temp_dir, file_obj.filename)
-    
-    with open(temp_path, "wb") as buffer:
-        shutil.copyfileobj(file_obj.file, buffer)
-
-    # Hand off to the core engine in the background to prevent SendGrid timeout
-    background_tasks.add_task(execute_forensic_audit, temp_path, sender_email)
-
-    return {"status": "received", "message": "Payload secured. LedgerFlux engine engaging."}
-
-
-def execute_forensic_audit(file_path: str, sender_email: str):
-    """
-    The Brain Connection: Where Webhook meets SCAM_DATABASE
-    """
-    print(f"[*] Initiating Deep Scan on {file_path} for {sender_email}...")
-    
-    # TODO: Import your analyzer.py or master_run.py OCR logic here.
-    # Example: result = ocr_engine.process_invoice(file_path)
-    
-    # MOCK RESULT FOR V1 TESTING
-    audit_result = {
-        "discrepancy_found": True,
-        "leakage_amount": "$430.00",
-        "reason": "Dimensional Weight Bloat (Carrier billed 150 lbs, actual DIM is 112 lbs)",
-        "carrier": "FedEx",
-        "invoice_ref": file_path.split("/")[-1]
-    }
-
-    # FIRING THE NODE.JS EMAIL CANNON
-    print("[*] Scan complete. Triggering Node.js Dispatcher for HTML Certificate...")
-    
-    # NOTE: Change this to your Render Node.js URL when deploying
-    node_api_url = "http://localhost:3000/api/dispatch-certificate" 
-    
-    payload = {
-        "to_email": sender_email,
-        "audit_data": audit_result
-    }
-    
-    try:
-        response = requests.post(node_api_url, json=payload)
-        if response.status_code == 200:
-            print("[+] HTML Dispute Certificate fired back to client successfully.")
-        else:
-            print(f"[-] Node API returned status: {response.status_code}")
-    except Exception as e:
-        print(f"[-] Node API Connection Failed: {e}")
-
-    # Burn the evidence
-    if os.path.exists(file_path):
-        os.remove(file_path)
-        print("[*] Temp payload deleted.")
+    # We are isolating the handshake. We will plug the Node.js emailer back in AFTER this works.
+    return {"status": "success", "message": "Handshake 100% verified."}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Ensure it's running
+    print("[*] Webhook Catcher Online. Awaiting transmission...")
+    uvicorn.run(app, host="127.0.0.1", port=8000)
