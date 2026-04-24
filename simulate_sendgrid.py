@@ -1,25 +1,54 @@
 import requests
+import os
 
-# This points to your local FastAPI webhook catcher
+# CONFIGURATION
 WEBHOOK_URL = "http://localhost:8000/inbound-parse"
+TEST_FILE = "sample_invoice.pdf"
 
-# We need a dummy PDF to test the engine
-test_pdf_path = "sample_invoice.pdf" # Ensure you have a dummy PDF named this in the same folder
+def simulate_stark_payload():
+    # 1. PRE-FLIGHT CHECK: Ensure the payload exists
+    if not os.path.exists(TEST_FILE):
+        print(f"[*] Generating emergency test document: {TEST_FILE}")
+        with open(TEST_FILE, "wb") as f:
+            f.write(b"%PDF-1.1\n%Stark Industries Freight Data")
 
-with open(test_pdf_path, "rb") as f:
-    # This dictionary perfectly mimics SendGrid's webhook structure
-    payload_data = {
+    # 2. CONSTRUCT DATA PAYLOAD
+    # SendGrid sends metadata as standard form fields
+    payload_fields = {
         "to": "audit@ledgerflux.com",
-        "From": "shabbir@testcompany.com", # SendGrid capitalizes 'From'
-        "subject": "Fwd: Q3 Freight Invoices FedEx"
-    }
-    
-    files = {
-        "attachment1": (test_pdf_path, f, "application/pdf")
+        "From": "stark@starkindustries.com",
+        "subject": "Q3 Logistics Audit - Urgent",
+        "attachments": "1" 
     }
 
-    print("[*] Firing simulated SendGrid payload at local Webhook...")
-    response = requests.post(WEBHOOK_URL, data=payload_data, files=files)
-    
-    print(f"Status Code: {response.status_code}")
-    print(f"Response: {response.json()}")
+    # 3. CONSTRUCT FILE STREAM
+    # We use a context manager to keep the file open during transmission
+    try:
+        with open(TEST_FILE, "rb") as f:
+            # SendGrid labels files as attachment1, attachment2, etc.
+            files = {
+                "attachment1": (TEST_FILE, f, "application/pdf")
+            }
+
+            print(f"[*] Firing Forensic Payload at {WEBHOOK_URL}...")
+            
+            # CRITICAL: We send 'data' for fields and 'files' for the PDF
+            response = requests.post(
+                WEBHOOK_URL, 
+                data=payload_fields, 
+                files=files
+            )
+
+        # 4. POST-FLIGHT ANALYSIS
+        if response.status_code == 200:
+            print("[+] Handshake Successful.")
+            print(f"[+] Engine Response: {response.json()}")
+        else:
+            print(f"[-] Handshake Failed. Status: {response.status_code}")
+            print(f"[-] Error Detail: {response.text}")
+
+    except Exception as e:
+        print(f"[!] System Critical Error during simulation: {e}")
+
+if __name__ == "__main__":
+    simulate_stark_payload()
