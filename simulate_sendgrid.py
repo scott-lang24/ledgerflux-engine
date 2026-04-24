@@ -12,7 +12,7 @@ print(f"[*] Asset forged: {TEST_FILE}")
 # 2. ASSEMBLE THE PAYLOAD
 data = {
     "to": "audit@ledgerflux.com",
-    "From": "tony@starkindustries.com"
+    "From": "jdoesbusiness09@gmail.com"
 }
 
 # 3. FIRE THE MISSILE
