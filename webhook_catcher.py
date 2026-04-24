@@ -11,20 +11,38 @@ async def receive_inbound_email(
     background_tasks: BackgroundTasks,
     request: Request,
     to: str = Form(...),
-    From: str = Form(...),  # SendGrid uses capital 'From'
-    subject: str = Form(None)
+    From: str = Form(...),
 ):
     form_data = await request.form()
     
-    # SendGrid dynamically labels attachments as 'attachment1', 'attachment2', etc.
-    attachments = [value for key, value in form_data.items() if key.startswith('attachment') and isinstance(value, UploadFile)]
+    # Check for files in both 'attachmentX' format AND standard 'files' format
+    attachments = []
+    for key, value in form_data.items():
+        if isinstance(value, UploadFile):
+            attachments.append(value)
     
     sender_email = From
-    print(f"[+] INCOMING ALERT: Audit Request intercepted from {sender_email}")
-    print(f"[+] Payloads detected: {len(attachments)} files")
+    print(f"[+] INCOMING ALERT: Audit intercepted from {sender_email}")
+    print(f"[+] Files detected in stream: {len(attachments)}")
 
     if not attachments:
-        return {"status": "ignored", "reason": "No PDF attached"}
+        return {"status": "ignored", "reason": "No files found in multipart stream"}
+
+    file_obj = attachments[0]
+    
+    # Ensure directory exists
+    temp_dir = "temp_inbound"
+    if not os.path.exists(temp_dir):
+        os.makedirs(temp_dir)
+        
+    temp_path = os.path.join(temp_dir, file_obj.filename)
+    
+    with open(temp_path, "wb") as buffer:
+        shutil.copyfileobj(file_obj.file, buffer)
+
+    background_tasks.add_task(execute_forensic_audit, temp_path, sender_email)
+
+    return {"status": "received", "message": f"LedgerFlux Engine engaging on {file_obj.filename}"}
 
     # We process the first attachment (The Carrier Invoice)
     file_obj = attachments[0]
