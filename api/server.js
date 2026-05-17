@@ -109,6 +109,37 @@ app.post('/api/dispatch-certificate', async (req, res) => {
         res.status(500).json({ error: "Failed to dispatch" });
     }
 });
+// --- 5.1 THE MANUAL UI EMAIL DISPATCHER (For Streamlit) ---
+app.post('/api/mail/send', async (req, res) => {
+    try {
+        const { to, subject, text, html_content, filename } = req.body;
+
+        console.log(`[*] Received manual UI dispatch request for: ${to}`);
+
+        const mailOptions = {
+            from: 'auditledgerflux@gmail.com', // Must match your auth user
+            to: to,
+            subject: subject,
+            text: text,
+            // The UI already built the beautiful HTML, so we just pass it through
+            html: html_content, 
+            attachments: [
+                {
+                    filename: filename || "LedgerFlux_Audit.html",
+                    content: html_content,
+                    contentType: 'text/html'
+                }
+            ]
+        };
+
+        await transporter.sendMail(mailOptions);
+        console.log(`[+] Manual UI Certificate successfully dispatched to ${to}`);
+        res.status(200).json({ message: "Dispute Sent" });
+    } catch (err) {
+        console.error("[-] Manual Mailer Error:", err);
+        res.status(500).json({ error: "Mail failed" });
+    }
+});
 // --- 6. IGNITION ---
 const PORT = 3000;
 app.listen(PORT, '0.0.0.0', () => { 
