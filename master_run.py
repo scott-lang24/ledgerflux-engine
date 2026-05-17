@@ -111,14 +111,37 @@ def generate_demo_data(file_bytes, trade_lane):
     return "Discrepancy", total_val + savings, savings, base_items
 
 
-# --- 2. ENTERPRISE CSS (GLASSMORPHISM & NEXT.JS VIBE) ---
+# --- 2. EXALTO STUDIO CSS (Dark Premium Minimalist) ---
 pro_css = """
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    /* Import Exalto Typography */
+    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,500&family=Inter:wght@300;400;500;600;700&display=swap');
     
+    :root {
+        --bg-primary: #0a0a0f;
+        --bg-secondary: #0f0f17;
+        --surface-card: #14141d;
+        --surface-elevated: #1b1b27;
+        --border-subtle: rgba(255, 255, 255, 0.08);
+        --border-visible: rgba(255, 255, 255, 0.14);
+        --text-primary: #ededf2;
+        --text-dim: #a3a3b5;
+        --text-muted: #6b6b80;
+        --accent-main: #b794f6;
+        --accent-hover: #c4a8f7;
+        --accent-glow: rgba(183, 148, 246, 0.35);
+    }
+
     /* Global Fonts & Backgrounds */
-    html, body, [class*="css"] { font-family: 'Inter', sans-serif !important; color: #fafafa; }
-    .stApp { background-color: #09090b; } /* Deep Zinc */
+    html, body, [class*="css"] { 
+        font-family: 'Inter', sans-serif !important; 
+        color: var(--text-primary); 
+        line-height: 1.6;
+    }
+    .stApp { background-color: var(--bg-primary); }
+    
+    /* Text Selection */
+    ::selection { background: var(--accent-main); color: var(--bg-primary); }
     
     /* Hide Streamlit Clutter */
     #MainMenu {visibility: hidden;} 
@@ -126,48 +149,123 @@ pro_css = """
     header {background-color: transparent !important;}
     
     /* Sidebar Polish */
-    section[data-testid="stSidebar"] { background-color: #121214; border-right: 1px solid rgba(255,255,255,0.05); }
+    section[data-testid="stSidebar"] { 
+        background-color: var(--bg-secondary); 
+        border-right: 1px solid var(--border-subtle); 
+    }
     
-    /* Glassmorphism Metrics */
+    /* Elegant Headings (Inter + Cormorant) */
+    h1, h2, h3 { 
+        font-weight: 300 !important; 
+        letter-spacing: -0.02em !important;
+        color: var(--text-primary) !important;
+    }
+    
+    /* Target specific words to apply the Serif Italic Gradient Accent */
+    .exalto-accent {
+        font-family: 'Cormorant Garamond', serif !important;
+        font-style: italic !important;
+        font-weight: 500 !important;
+        background: linear-gradient(135deg, #d4bbff 0%, #b794f6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        padding-right: 4px; /* Prevent italic clipping */
+    }
+
+    /* Section Eyebrow styling */
+    .eyebrow {
+        text-transform: uppercase;
+        font-size: 12px;
+        letter-spacing: 0.2em;
+        color: var(--text-dim);
+        display: block;
+        margin-bottom: 8px;
+    }
+    .eyebrow::before {
+        content: '';
+        display: inline-block;
+        width: 24px;
+        height: 1px;
+        background-color: var(--accent-main);
+        margin-right: 12px;
+        vertical-align: middle;
+    }
+    
+    /* Metric Cards (Surface Card) */
     div[data-testid="stMetric"] { 
-        background: rgba(39, 39, 42, 0.4); 
-        border: 1px solid rgba(255,255,255,0.08); 
-        border-radius: 12px; 
-        padding: 20px; 
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
-        backdrop-filter: blur(10px); 
+        background: var(--surface-card); 
+        border: 1px solid var(--border-subtle); 
+        border-radius: 16px; 
+        padding: 24px; 
+        transition: all 0.3s ease;
     }
-    div[data-testid="stMetricValue"] { font-weight: 700; font-size: 28px; color: #ffffff; }
-    div[data-testid="stMetricDelta"] { font-weight: 500; color: #10b981 !important; } /* Emerald Green */
+    div[data-testid="stMetric"]:hover {
+        transform: translateY(-4px);
+        border-color: var(--accent-main);
+        box-shadow: 0 8px 24px var(--accent-glow);
+    }
+    div[data-testid="stMetricValue"] { 
+        font-weight: 300; 
+        font-size: 32px; 
+        color: var(--text-primary); 
+    }
+    div[data-testid="stMetricDelta"] { font-weight: 400; color: var(--accent-main) !important; }
     
-    /* Cybernetic Gradient Buttons */
+    /* Solid Purple Buttons */
     .stButton > button { 
-        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); 
-        color: white; 
-        border-radius: 8px; 
+        background-color: var(--accent-main); 
+        color: var(--bg-primary); 
+        border-radius: 10px; 
         border: none; 
-        height: 48px; 
-        font-weight: 600; 
-        letter-spacing: 0.3px;
+        height: 52px; 
+        font-weight: 500; 
+        letter-spacing: 0.5px;
         transition: all 0.3s ease; 
-        box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
     }
-    .stButton > button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5); border: none;}
+    .stButton > button:hover { 
+        transform: translateY(-2px); 
+        background-color: var(--accent-hover);
+        box-shadow: 0 4px 16px var(--accent-glow); 
+        color: var(--bg-primary);
+    }
+    
+    /* Ghost Buttons (Fallback styling for secondary buttons) */
+    button[kind="secondary"] {
+        background-color: transparent !important;
+        border: 1px solid var(--border-visible) !important;
+        color: var(--text-primary) !important;
+    }
+    button[kind="secondary"]:hover {
+        border-color: var(--accent-main) !important;
+        color: var(--accent-main) !important;
+    }
     
     /* Clean Inputs */
-    .stTextInput>div>div>input { background-color: rgba(39,39,42,0.5); border: 1px solid rgba(255,255,255,0.1); color: white; border-radius: 8px;}
-    .stTextInput>div>div>input:focus { border-color: #6366f1; box-shadow: none; }
+    .stTextInput>div>div>input, .stSelectbox>div>div>div { 
+        background-color: var(--bg-secondary); 
+        border: 1px solid var(--border-visible); 
+        color: var(--text-primary); 
+        border-radius: 10px;
+    }
+    .stTextInput>div>div>input:focus, .stSelectbox>div>div>div:focus { 
+        border-color: var(--accent-main); 
+        box-shadow: 0 0 0 1px var(--accent-main);
+    }
     
     /* Centered Login Vault */
     .login-container {
-        background: #121214; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 40px; text-align: center;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.5); margin-top: 5vh;
+        background: var(--surface-card); 
+        border: 1px solid var(--border-subtle); 
+        border-radius: 18px; 
+        padding: 48px; 
+        text-align: center;
+        margin-top: 5vh;
     }
     
-    /* DataFrame/Table styling via Streamlit Native (Fallback for markdown tables) */
-    table { background-color: transparent !important; color: #fafafa !important;}
-    th { background-color: rgba(255,255,255,0.05) !important; color: #a1a1aa !important; border-bottom: 1px solid rgba(255,255,255,0.1) !important;}
-    td { border-bottom: 1px solid rgba(255,255,255,0.05) !important;}
+    /* DataFrame/Table styling */
+    table { background-color: transparent !important; color: var(--text-dim) !important;}
+    th { background-color: var(--surface-elevated) !important; color: var(--text-muted) !important; border-bottom: 1px solid var(--border-subtle) !important; font-weight: 500 !important; letter-spacing: 0.05em;}
+    td { border-bottom: 1px solid var(--border-subtle) !important;}
 </style>
 """
 st.markdown(pro_css, unsafe_allow_html=True)
@@ -212,7 +310,7 @@ def login():
         st.markdown("""
         <div class='login-container'>
             <h1 style='font-size: 48px; margin-bottom: 0px;'>⚡</h1>
-            <h2 style='margin-top: 10px; margin-bottom: 5px;'>LedgerFlux Mainframe</h2>
+            <h2 style='margin-top: 10px; margin-bottom: 5px;'>LedgerFlux <span class='exalto-accent'>Mainframe</span></h2>
             <p style='color: #a1a1aa; font-size: 14px; margin-bottom: 30px;'>Enterprise Authentication Gateway</p>
         </div>
         """, unsafe_allow_html=True)
@@ -293,7 +391,7 @@ else:
 
     # --- DASHBOARD TAB ---
     if selected == "Dashboard":
-        st.markdown(f"<h2>Historical Audit Summary <span style='color:#a1a1aa; font-weight:400; font-size:18px;'>| {company}</span></h2>", unsafe_allow_html=True)
+        st.markdown(f"<span class='eyebrow'>Analytics</span><h2>Historical Audit <span class='exalto-accent'>Summary</span> <span style='color:var(--text-muted); font-size:16px;'>| {company}</span></h2>", unsafe_allow_html=True)
         
         data = get_client_stats()
         total_rec = data['total_savings'].sum() if not data.empty and 'total_savings' in data else 0
@@ -339,7 +437,7 @@ else:
 
     # --- REQUEST NEW CHECK TAB ---
     elif selected == "Request New Check":
-        st.markdown("<h2>Autonomous Invoice Ingestion</h2>", unsafe_allow_html=True)
+        st.markdown("<span class='eyebrow'>Ingestion</span><h2>Autonomous Invoice <span class='exalto-accent'>Processing</span></h2>", unsafe_allow_html=True)
         
         with st.container():
             st.markdown("#### Operational Parameters")
