@@ -218,10 +218,10 @@ def login():
         """, unsafe_allow_html=True)
         
         with st.form("login_form"):
-            email = st.text_input("Corporate Email", placeholder="cfo@omniactive.com")
+            email = st.text_input("Corporate Email", placeholder="email@corp.com")
             password = st.text_input("Security Protocol (Password)", type="password", placeholder="••••••••")
             st.markdown("<br>", unsafe_allow_html=True)
-            submitted = st.form_submit_button("Initiate Handshake")
+            submitted = st.form_submit_button("Log In")
             
             if submitted:
                 try:
@@ -233,10 +233,6 @@ def login():
                     
                     # RBAC Engine: Auto-Assign Roles based on email syntax
                     role = "Admin"
-                    if email.lower().startswith("ops") or email.lower().startswith("warehouse"):
-                        role = "Ops Uploader"
-                    elif email.lower().startswith("cfo") or email.lower().startswith("finance"):
-                        role = "Finance Viewer"
                     
                     company_name = email.split('@')[1].split('.')[0].capitalize() if '@' in email else "Enterprise"
                     st.session_state['user_info'] = {'user': email, 'company': company_name, 'role': role}
