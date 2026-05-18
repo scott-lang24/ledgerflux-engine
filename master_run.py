@@ -282,24 +282,34 @@ lottie_scanning = load_lottie_url("https://assets10.lottiefiles.com/packages/lf2
 lottie_email = load_lottie_url("https://assets5.lottiefiles.com/packages/lf20_swoi6t8m.json")
 
 def get_client_stats():
+    """
+    Direct Database Query. Bypasses all APIs, Render, and Node.js.
+    Zero latency. Zero timeouts.
+    """
     try:
         user_id = st.session_state.get('user_id', '')
-        # ADDED TIMEOUT: If Render sleeps, we don't want the UI hanging during a demo
-        response = requests.get(f"http://127.0.0.1:3000/api/audits/summary?clientId={user_id}", timeout=20)
-        if response.status_code == 200:
-            return pd.DataFrame(response.json())
+        
+        # Pull data directly from the Supabase cloud vault
+        response = supabase.table('audit').select('*').eq('clientId', user_id).execute()
+        
+        if response.data:
+            # Map the database columns to match our UI expectations
+            df = pd.DataFrame(response.data)
+            # Ensure columns exist even if the table is slightly different
+            if 'carrier_name' not in df.columns and 'carrier' in df.columns:
+                df['carrier_name'] = df['carrier']
+            if 'total_billed' not in df.columns and 'billed_amount' in df.columns:
+                df['total_billed'] = df['billed_amount']
+            if 'total_savings' not in df.columns and 'savings_amount' in df.columns:
+                df['total_savings'] = df['savings_amount']
+                
+            return df
         else:
             return pd.DataFrame()
-    except:
-        # Fallback to local DB if Render is down during your pitch
-        try:
-            conn = get_db_connection()
-            df = pd.read_sql_query("SELECT invoice_id as invoice_number, carrier as carrier_name, status, billed_amount as total_billed, savings_amount as total_savings, timestamp FROM audits ORDER BY timestamp DESC LIMIT 50", conn)
-            conn.close()
-            return df
-        except:
-            return pd.DataFrame()
-
+            
+    except Exception as e:
+        print(f"[-] Dashboard DB Query Failed: {e}")
+        return pd.DataFrame()
 # --- 4. MAIN APP & LOGIN FLOW ---
 if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
 
