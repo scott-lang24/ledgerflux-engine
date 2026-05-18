@@ -285,7 +285,7 @@ def get_client_stats():
     try:
         user_id = st.session_state.get('user_id', '')
         # ADDED TIMEOUT: If Render sleeps, we don't want the UI hanging during a demo
-        response = requests.get(f"https://ledgerflux-engine.onrender.com/api/audits/summary?clientId={user_id}", timeout=20)
+        response = requests.get(f"http://127.0.0.1:3000/api/audits/summary?clientId={user_id}", timeout=20)
         if response.status_code == 200:
             return pd.DataFrame(response.json())
         else:
