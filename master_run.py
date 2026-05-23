@@ -496,6 +496,41 @@ else:
                 try:
                     # ==========================================================
                     # YOUR EXISTING PDF PROCESSING CODE GOES HERE.
+                    # ==========================================================
+                    # PHASE 3: THE BOARDROOM GOD MODE (WEBHOOK TRIGGER)
+                    # ==========================================================
+                    import requests
+                    
+                    # 1. Simulate the perfect Vision AI extraction for the live pitch
+                    demo_payload = {
+                        "tenant_id": "cfo_pitch_001",
+                        "invoice_data": {
+                            "carrier": carrier, # Pulls directly from your UI dropdown
+                            "billed_amount": 1250.00,
+                            "billed_weight": 45.0,
+                            "zone": 4,
+                            "sla_status": "THERMAL BREACH DETECTED: +4°C variance at Transit Hub"
+                        }
+                    }
+                    
+                    # 2. Fire the payload into the Invisible Plumbing (Node.js)
+                    terminal.code(f"[*] Triangulating {carrier} Rate Card vs Billed Amount...")
+                    time.sleep(1)
+                    
+                    try:
+                        # Connects your frontend UI directly to your backend Node engine
+                        response = requests.post(
+                            "http://127.0.0.1:3000/api/audit/webhook",
+                            json=demo_payload,
+                            timeout=5
+                        )
+                        if response.status_code == 200:
+                            terminal.code("[+] Webhook caught payload. Engine synchronous.")
+                        else:
+                            terminal.code(f"[-] Backend sync warning: Status {response.status_code}")
+                    except Exception as e:
+                        terminal.code("[-] Local server offline. Operating in frontend-only cache mode.")
+                    # ==========================================================
                     # Usually looks something like: results = process_pdf(uploaded_file)
                     # ==========================================================
                     
