@@ -140,6 +140,26 @@ app.post('/api/mail/send', async (req, res) => {
         res.status(500).json({ error: "Mail failed" });
     }
 });
+// =====================================================================
+// THE INVISIBLE PLUMBING: INBOUND WEBHOOK CATCHER
+// =====================================================================
+app.post('/api/audit/webhook', (req, res) => {
+    console.log(`\n====================================================`);
+    console.log(`🚨 ALERT: INCOMING INVOICE PAYLOAD DETECTED`);
+    console.log(`🏢 CLIENT: ${req.body.tenant_id}`);
+    console.log(`📦 CARRIER: ${req.body.invoice_data.carrier}`);
+    console.log(`💰 BILLED: $${req.body.invoice_data.billed_amount}`);
+    console.log(`====================================================\n`);
+
+    // The engine acknowledges receipt and fakes an instant audit response
+    // In production, this hands the data off to Python for the heavy math.
+    res.status(200).json({
+        status: "SUCCESS",
+        message: "Invoice successfully intercepted by LedgerFlux.",
+        estimated_leakage_found: "$50.00",
+        action_taken: "Dispute Certificate Generated"
+    });
+});
 // --- 6. IGNITION ---
 const PORT = 3000;
 app.listen(PORT, '0.0.0.0', () => { 
