@@ -530,6 +530,49 @@ else:
                             terminal.code(f"[-] Backend sync warning: Status {response.status_code}")
                     except Exception as e:
                         terminal.code("[-] Local server offline. Operating in frontend-only cache mode.")
+                        # ==========================================================
+                    # PHASE 4: THE BOARDROOM CLOSER (UI & DB SYNC)
+                    # ==========================================================
+                    
+                    # 1. Force the database save so the Dashboard updates instantly
+                    try:
+                        db_payload = {
+                            "clientId": st.session_state.get('user_id', 'demo_user'),
+                            "invoice_number": "DEMO-" + str(int(time.time())),
+                            "carrier": carrier,
+                            "billed_amount": 1250.00,
+                            "savings_amount": 85.00, # The exact leakage amount
+                            "status": "Discrepancy",
+                            "sla_breach": 1 # Triggers the Thermal Breach counter
+                        }
+                        supabase.table('audit').insert(db_payload).execute()
+                        terminal.code("[+] Database synced. Dashboard metrics updated.")
+                    except Exception as e:
+                        terminal.code(f"[-] DB Sync bypass. Operating in local-only demo mode.")
+
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    
+                    # 2. Render the majestic Dispute Certificate UI
+                    st.success("✅ Audit Complete! Discrepancies isolated.")
+                    
+                    st.markdown("### 📜 Official Dispute Certificate")
+                    st.info(f"**Carrier:** {carrier} | **Overcharge Found:** $85.00 | **SLA:** Thermal Breach (+4°C)")
+
+                    # 3. The Action Buttons
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
+                        if st.button("📧 Dispatch Legal Notice via Email", use_container_width=True):
+                            st.success(f"Dispute successfully dispatched to {carrier} Billing Department!")
+                            st.balloons() # Subliminal positive reinforcement for the CFO
+                    with col_btn2:
+                        st.download_button(
+                            label="📥 Download Certificate (PDF)",
+                            data=b"Mock PDF Data for Pitch Demo purposes.",
+                            file_name=f"Dispute_Certificate_{carrier}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                    # ==========================================================
                     # ==========================================================
                     # Usually looks something like: results = process_pdf(uploaded_file)
                     # ==========================================================
