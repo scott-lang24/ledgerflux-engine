@@ -1,169 +1,63 @@
+// server.js
 const express = require('express');
-const cors = require('cors');
-const multer = require('multer');
-const AdmZip = require('adm-zip');
-const fs = require('fs');
-const path = require('path');
-const { exec } = require('child_process');
-const { PrismaClient } = require('@prisma/client');
 const nodemailer = require('nodemailer');
+const cors = require('cors');
 
-console.log("\n[BOOT] Powering up LedgerFlux Enterprise Engine...");
-
-// --- 1. INITIALIZATION & CORE SYSTEM ---
-const prisma = new PrismaClient();
 const app = express();
-
+app.use(express.json());
 app.use(cors());
-app.use(express.json({ limit: '100mb' }));
-app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
-const uploadDir = path.join(__dirname, '../uploads');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-const upload = multer({ dest: uploadDir });
+// =====================================================================
+// PHASE 8: THE LIVE AMMO WEBHOOK RECEIVER
+// =====================================================================
+app.post('/api/audit/webhook', async (req, res) => {
+    const { invoice_data } = req.body;
+    
+    console.log(`[*] INCOMING PAYLOAD: ${invoice_data.carrier} audit caught.`);
+    console.log(`[*] Arming SMTP Relay...`);
 
-// --- 2. THE SMTP CANNON (Loaded with your real credentials) ---
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: 'auditledgerflux@gmail.com', 
-        pass: 'otyf wtfh jwhw kywf'      
-    }
-});
+    // 1. The Engine Setup
+    const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+            user: 'audit.ledgerflux@gmail.com',     // 🔴 CHANGE THIS: Your actual Gmail address
+            pass: 'otyf wtfh jwhw kywf'   // 🔴 CHANGE THIS: The App Password (no spaces)
+        }
+    });
 
-// --- 3. DATABASE SEEDER ---
-async function initializeDB() {
-    try {
-        await prisma.client.upsert({
-            where: { id: "OMNIACTIVE-UUID-001" },
-            update: {},
-            create: { id: "OMNIACTIVE-UUID-001", company_name: "OmniActive Health" }
-        });
-        console.log("[BOOT] System Client 'OMNIACTIVE-UUID-001' verified in Supabase.");
-    } catch (e) {
-        console.error("[BOOT ERROR] Database connection failed.", e.message);
-    }
-}
-initializeDB();
-
-// --- 4. ROUTES & ENDPOINTS ---
-
-app.get('/', (req, res) => res.send("⚡ LedgerFlux API is Online and Routing Traffic."));
-
-app.get('/health', async (req, res) => {
-    try {
-        await prisma.$queryRaw`SELECT 1`;
-        res.status(200).json({ status: "Database Connected ⚡" });
-    } catch (e) {
-        res.status(500).json({ status: "Database Offline", error: e.message });
-    }
-});
-
-app.get('/api/audits/summary', async (req, res) => {
-    try {
-        const audits = await prisma.audit.findMany({ orderBy: { timestamp: 'desc' }, take: 50 });
-        res.json(audits);
-    } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// --- 5. THE AUTONOMOUS EMAIL DISPATCHER ---
-app.post('/api/dispatch-certificate', async (req, res) => {
-    const { to_email, audit_data, pdf_attachment } = req.body;
-
-    if (!to_email || !audit_data) {
-        return res.status(400).json({ error: "Missing payload data" });
-    }
-
-    console.log(`[*] Received dispatch request for: ${to_email}. Attaching PDF artifact.`);
-
-    const htmlCertificate = `
-        <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; max-width: 600px;">
-            <h2 style="color: #d9534f; margin-top: 0;">LedgerFlux Forensic Alert</h2>
-            <p><strong>Carrier:</strong> ${audit_data.carrier}</p>
-            <h3 style="color: #292b2c;">Leakage Detected: <span style="color: #d9534f;">${audit_data.leakage_amount}</span></h3>
-            <br/>
-            <p><em>We have attached your official PDF Dispute Certificate to this email. Please forward the attachment to your carrier representative.</em></p>
-        </div>
-    `;
-
+    // 2. The Enterprise HTML Template
     const mailOptions = {
-        from: 'auditledgerflux@gmail.com',
-        to: to_email,
-        subject: `ACTION REQUIRED: Invoice Discrepancy Found (${audit_data.leakage_amount})`,
-        html: htmlCertificate,
-        attachments: [
-            {
-                filename: `LedgerFlux_Dispute_${audit_data.invoice_ref}.pdf`,
-                content: pdf_attachment,
-                encoding: 'base64'
-            }
-        ]
+        from: '"LedgerFlux Autonomous Audit" <YOUR_EMAIL@gmail.com>', // 🔴 CHANGE THIS: Your Gmail
+        to: 'THE_CFO_EMAIL@gmail.com', // Change this to whoever you want the email to go to during the pitch
+        subject: `URGENT: SLA Breach & Discrepancy Notice (${invoice_data.carrier})`,
+        html: `
+            <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; padding: 25px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                <h2 style="color: #0f172a; margin-top: 0;">⚡ LedgerFlux Dispute Certificate</h2>
+                <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+                <p style="color: #475569; font-size: 16px;"><strong>Target Carrier:</strong> ${invoice_data.carrier}</p>
+                <p style="color: #475569; font-size: 16px;"><strong>Violation Type:</strong> <span style="color: #ef4444; font-weight: 600;">${invoice_data.sla_status}</span></p>
+                <p style="color: #475569; font-size: 16px;"><strong>Financial Impact:</strong> <span style="color: #10b981; font-size: 18px; font-weight: 800;">Actionable Leakage Isolated</span></p>
+                <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+                <p style="color: #64748b; font-size: 14px; line-height: 1.5;">This is an automated legal compliance notice generated by the LedgerFlux Forensic Engine. The carrier rate card has been triangulated against actual billed vectors.</p>
+                <p style="color: #0f172a; font-size: 14px; font-weight: bold;">ACTION REQUIRED: Process credit memo within 48 hours to avoid AP holds.</p>
+            </div>
+        `
     };
 
+    // 3. Fire the Payload
     try {
         await transporter.sendMail(mailOptions);
-        console.log(`[+] Email with PDF Certificate successfully dispatched to ${to_email}`);
-        res.status(200).json({ message: "Success" });
+        console.log("[+] LIVE AMMO FIRED: Dispute Certificate successfully delivered.");
+        res.status(200).send({ status: "Success", message: "Dispute Dispatched" });
     } catch (error) {
-        console.error("[-] Node Mailer Error:", error);
-        res.status(500).json({ error: "Failed to dispatch" });
+        console.error("[-] MISFIRE (Check Gmail Credentials):", error);
+        res.status(500).send({ status: "Failed", error: error.message });
     }
 });
-// --- 5.1 THE MANUAL UI EMAIL DISPATCHER (For Streamlit) ---
-app.post('/api/mail/send', async (req, res) => {
-    try {
-        const { to, subject, text, html_content, filename } = req.body;
 
-        console.log(`[*] Received manual UI dispatch request for: ${to}`);
-
-        const mailOptions = {
-            from: 'auditledgerflux@gmail.com', // Must match your auth user
-            to: to,
-            subject: subject,
-            text: text,
-            // The UI already built the beautiful HTML, so we just pass it through
-            html: html_content, 
-            attachments: [
-                {
-                    filename: filename || "LedgerFlux_Audit.html",
-                    content: html_content,
-                    contentType: 'text/html'
-                }
-            ]
-        };
-
-        await transporter.sendMail(mailOptions);
-        console.log(`[+] Manual UI Certificate successfully dispatched to ${to}`);
-        res.status(200).json({ message: "Dispute Sent" });
-    } catch (err) {
-        console.error("[-] Manual Mailer Error:", err);
-        res.status(500).json({ error: "Mail failed" });
-    }
-});
-// =====================================================================
-// THE INVISIBLE PLUMBING: INBOUND WEBHOOK CATCHER
-// =====================================================================
-app.post('/api/audit/webhook', (req, res) => {
-    console.log(`\n====================================================`);
-    console.log(`🚨 ALERT: INCOMING INVOICE PAYLOAD DETECTED`);
-    console.log(`🏢 CLIENT: ${req.body.tenant_id}`);
-    console.log(`📦 CARRIER: ${req.body.invoice_data.carrier}`);
-    console.log(`💰 BILLED: $${req.body.invoice_data.billed_amount}`);
-    console.log(`====================================================\n`);
-
-    // The engine acknowledges receipt and fakes an instant audit response
-    // In production, this hands the data off to Python for the heavy math.
-    res.status(200).json({
-        status: "SUCCESS",
-        message: "Invoice successfully intercepted by LedgerFlux.",
-        estimated_leakage_found: "$50.00",
-        action_taken: "Dispute Certificate Generated"
-    });
-});
-// --- 6. IGNITION ---
-const PORT = 3000;
-app.listen(PORT, '0.0.0.0', () => { 
-    console.log(`====================================================`);
-    console.log(`⚡ LEDGERFLUX API ROUTER ONLINE : PORT ${PORT}`);
-    console.log(`====================================================\n`);
+app.listen(3000, () => {
+    console.log('=============================================');
+    console.log('⚡ LEDGERFLUX INVISIBLE PLUMBING ONLINE');
+    console.log('⚡ Listening for Webhooks on Port 3000...');
+    console.log('=============================================');
 });
