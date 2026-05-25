@@ -518,9 +518,6 @@ else:
                                 st.success("Legal Notice Successfully Dispatched!")
             else:
                 st.info("No documents parsed yet. Awaiting payload.")
-                
-        else:
-            st.info("No documents parsed yet. Awaiting payload.")
     # --- REQUEST NEW CHECK TAB ---
     elif selected == "Request New Check":
         st.markdown("<span class='eyebrow'>Ingestion</span><h2>Autonomous Invoice <span class='exalto-accent'>Processing</span></h2>", unsafe_allow_html=True)
