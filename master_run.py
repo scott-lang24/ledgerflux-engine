@@ -540,8 +540,8 @@ else:
                             "clientId": st.session_state.get('user_id', 'demo_user'),
                             "invoice_number": "DEMO-" + str(int(time.time())),
                             "carrier": carrier,
-                            "billed_amount": 1250.00,
-                            "savings_amount": 85.00, # The exact leakage amount
+                            "total_billed": 1250.00,
+                            "total_savings": 85.00, # The exact leakage amount
                             "status": "Discrepancy",
                             "sla_breach": 1 # Triggers the Thermal Breach counter
                         }
