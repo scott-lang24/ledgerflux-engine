@@ -572,6 +572,61 @@ else:
                             mime="application/pdf",
                             use_container_width=True
                         )
+                        # ==========================================================
+                    # PHASE 5: THE ENTERPRISE UI POLISH (THE TANGIBLE PROOF)
+                    # ==========================================================
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    
+                    # 1. The Visual Certificate Card (HTML/CSS for a $10M look)
+                    st.markdown(f"""
+                    <div style='background-color: #1E1E2E; padding: 25px; border-radius: 10px; border-left: 5px solid #8b5cf6; margin-bottom: 20px; border: 1px solid #334155;'>
+                        <h3 style='margin-top: 0; color: #F8FAFC;'>⚖️ Official Dispute & Recovery Certificate</h3>
+                        <hr style='border-color: #334155; margin-bottom: 15px;'>
+                        <p style='color: #94A3B8; font-size: 16px; margin: 5px 0;'><strong>Target Carrier:</strong> <span style='color: #F8FAFC;'>{carrier}</span></p>
+                        <p style='color: #94A3B8; font-size: 16px; margin: 5px 0;'><strong>Financial Leakage Detected:</strong> <span style='color: #10B981; font-weight: bold; font-size: 18px;'>$85.00</span></p>
+                        <p style='color: #94A3B8; font-size: 16px; margin: 5px 0;'><strong>Compliance Violation:</strong> <span style='color: #EF4444;'>Thermal SLA Breach (+4°C at Transit Hub)</span></p>
+                        <p style='color: #94A3B8; font-size: 16px; margin: 5px 0;'><strong>Reference ID:</strong> <span style='color: #F8FAFC;'>LFX-TRX-99482</span></p>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    # 2. The Auto-Generated Legal Notice (What the CFO wants to see)
+                    st.markdown("#### 📝 Auto-Drafted Legal Notice")
+                    
+                    legal_draft = f"""SUBJECT: URGENT - Invoice Dispute & SLA Breach Notice (Ref: LFX-TRX-99482)
+
+To {carrier} Billing & Compliance Team,
+
+Our automated freight audit engine (LedgerFlux) has intercepted your recent invoice. We have identified a direct discrepancy against our negotiated rate card and active SLA agreements.
+
+> Disputed Amount: $85.00
+> Violation Type: Thermal SLA Breach (+4°C variance detected)
+> Action Required: Immediate credit memo to our account.
+
+Attached is the auto-generated Dispute Certificate detailing the exact vector data. Please process this adjustment within 48 hours to avoid payment holds on this specific invoice.
+
+Regards,
+LedgerFlux Autonomous Audit System
+(On behalf of Finance & Operations)"""
+                    
+                    # Displays the text area so it looks like a real email client
+                    st.text_area("Review and Edit Notice before dispatch:", value=legal_draft, height=280)
+
+                    # 3. The Action Buttons
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
+                        # Made the button 'primary' so it pops
+                        if st.button("📧 Dispatch Legal Notice via Webhook", use_container_width=True, type="primary"):
+                            st.success(f"Legal notice successfully dispatched to {carrier}!")
+                            st.balloons()
+                    with col_btn2:
+                        st.download_button(
+                            label="📥 Download Certificate (PDF)",
+                            data=b"Mock PDF Data for Pitch Demo purposes.",
+                            file_name=f"Dispute_Certificate_{carrier}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                    # ==========================================================
                     # ==========================================================
                     # ==========================================================
                     # Usually looks something like: results = process_pdf(uploaded_file)
