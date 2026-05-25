@@ -268,23 +268,31 @@ lottie_scanning = load_lottie_url("https://assets10.lottiefiles.com/packages/lf2
 lottie_email = load_lottie_url("https://assets5.lottiefiles.com/packages/lf20_swoi6t8m.json")
 
 def get_client_stats():
+    # 1. Initialize local cache if it doesn't exist
+    if 'local_audit_vault' not in st.session_state:
+        st.session_state['local_audit_vault'] = []
+
     try:
         user_id = st.session_state.get('user_id', '')
         response = supabase.table('audit').select('*').eq('clientId', user_id).execute()
-        if response.data:
-            df = pd.DataFrame(response.data)
-            if 'carrier_name' not in df.columns and 'carrier' in df.columns:
-                df['carrier_name'] = df['carrier']
-            if 'total_billed' not in df.columns and 'billed_amount' in df.columns:
-                df['total_billed'] = df['billed_amount']
-            if 'total_savings' not in df.columns and 'savings_amount' in df.columns:
-                df['total_savings'] = df['savings_amount']
-            return df
-        else:
-            return pd.DataFrame()
-    except Exception as e:
-        print(f"[-] Dashboard DB Query Failed: {e}")
-        return pd.DataFrame()
+        db_data = response.data if response.data else []
+    except:
+        db_data = []
+
+    # 2. Merge Cloud DB and Local Session Cache
+    combined_data = db_data + st.session_state['local_audit_vault']
+
+    if combined_data:
+        df = pd.DataFrame(combined_data)
+        df = df.drop_duplicates(subset=['invoice_number']) # Prevent duplicates
+        if 'carrier_name' not in df.columns and 'carrier' in df.columns:
+            df['carrier_name'] = df['carrier']
+        if 'total_billed' not in df.columns and 'billed_amount' in df.columns:
+            df['total_billed'] = df['billed_amount']
+        if 'total_savings' not in df.columns and 'savings_amount' in df.columns:
+            df['total_savings'] = df['savings_amount']
+        return df
+    return pd.DataFrame()
 
 # --- 4. MAIN APP & LOGIN FLOW ---
 if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
@@ -528,21 +536,29 @@ else:
                         terminal.code(f"[SYS] Active Contract match sequence initiated...", language="bash")
                         status, billed, savings, details = run_audit(extracted_rows, carrier)
                     
-                    # THE DB SYNC: Push the data to Supabase so the Dashboard sees it immediately
+                   # THE DB SYNC: Double-Strike Save (Cloud + Local RAM)
+                    db_payload = {
+                        "clientId": st.session_state.get('user_id', 'demo_user'),
+                        "invoice_number": inv_id,
+                        "carrier_name": carrier,
+                        "total_billed": billed,
+                        "total_savings": savings,
+                        "status": status,
+                        "sla_breach": 1 if savings > 0 else 0,
+                        "timestamp": datetime.datetime.now().isoformat()
+                    }
+                    
+                    # 1. Save to local RAM so dashboard updates instantly NO MATTER WHAT
+                    if 'local_audit_vault' not in st.session_state:
+                        st.session_state['local_audit_vault'] = []
+                    st.session_state['local_audit_vault'].append(db_payload)
+
+                    # 2. Try to save to Cloud
                     try:
-                        db_payload = {
-                            "clientId": st.session_state.get('user_id', 'demo_user'),
-                            "invoice_number": inv_id,
-                            "carrier_name": carrier,
-                            "total_billed": billed,
-                            "total_savings": savings,
-                            "status": status,
-                            "sla_breach": 1 if savings > 0 else 0
-                        }
                         supabase.table('audit').insert(db_payload).execute()
-                        terminal.code("[+] Triangle of Truth 3-Way Match Complete. Dashboard Sync Successful.")
+                        terminal.code("[+] Triangle of Truth Match Complete. Cloud Sync Successful.")
                     except Exception as e:
-                        terminal.code(f"[-] DB Sync bypass. Offline Mode Active.")
+                        terminal.code(f"[-] Cloud Sync Blocked (Check DB Table/RLS). Local Cache Active.")
 
                     time.sleep(0.5)
                     log_audit(inv_id, status, billed, savings)
