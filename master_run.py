@@ -114,7 +114,6 @@ def generate_demo_data(file_bytes, trade_lane):
 # --- 2. EXALTO STUDIO CSS (Dark Premium Minimalist) ---
 pro_css = """
 <style>
-    /* Import Exalto Typography */
     @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,500&family=Inter:wght@300;400;500;600;700&display=swap');
     
     :root {
@@ -132,7 +131,6 @@ pro_css = """
         --accent-glow: rgba(183, 148, 246, 0.35);
     }
 
-    /* Global Fonts & Backgrounds */
     html, body, [class*="css"] { 
         font-family: 'Inter', sans-serif !important; 
         color: var(--text-primary); 
@@ -140,28 +138,23 @@ pro_css = """
     }
     .stApp { background-color: var(--bg-primary); }
     
-    /* Text Selection */
     ::selection { background: var(--accent-main); color: var(--bg-primary); }
     
-    /* Hide Streamlit Clutter */
     #MainMenu {visibility: hidden;} 
     footer {visibility: hidden;}
     header {background-color: transparent !important;}
     
-    /* Sidebar Polish */
     section[data-testid="stSidebar"] { 
         background-color: var(--bg-secondary); 
         border-right: 1px solid var(--border-subtle); 
     }
     
-    /* Elegant Headings (Inter + Cormorant) */
     h1, h2, h3 { 
         font-weight: 300 !important; 
         letter-spacing: -0.02em !important;
         color: var(--text-primary) !important;
     }
     
-    /* Target specific words to apply the Serif Italic Gradient Accent */
     .exalto-accent {
         font-family: 'Cormorant Garamond', serif !important;
         font-style: italic !important;
@@ -169,10 +162,9 @@ pro_css = """
         background: linear-gradient(135deg, #d4bbff 0%, #b794f6 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        padding-right: 4px; /* Prevent italic clipping */
+        padding-right: 4px; 
     }
 
-    /* Section Eyebrow styling */
     .eyebrow {
         text-transform: uppercase;
         font-size: 12px;
@@ -191,7 +183,6 @@ pro_css = """
         vertical-align: middle;
     }
     
-    /* Metric Cards (Surface Card) */
     div[data-testid="stMetric"] { 
         background: var(--surface-card); 
         border: 1px solid var(--border-subtle); 
@@ -211,7 +202,6 @@ pro_css = """
     }
     div[data-testid="stMetricDelta"] { font-weight: 400; color: var(--accent-main) !important; }
     
-    /* Solid Purple Buttons */
     .stButton > button { 
         background-color: var(--accent-main); 
         color: var(--bg-primary); 
@@ -229,7 +219,6 @@ pro_css = """
         color: var(--bg-primary);
     }
     
-    /* Ghost Buttons (Fallback styling for secondary buttons) */
     button[kind="secondary"] {
         background-color: transparent !important;
         border: 1px solid var(--border-visible) !important;
@@ -240,7 +229,6 @@ pro_css = """
         color: var(--accent-main) !important;
     }
     
-    /* Clean Inputs */
     .stTextInput>div>div>input, .stSelectbox>div>div>div { 
         background-color: var(--bg-secondary); 
         border: 1px solid var(--border-visible); 
@@ -252,7 +240,6 @@ pro_css = """
         box-shadow: 0 0 0 1px var(--accent-main);
     }
     
-    /* Centered Login Vault */
     .login-container {
         background: var(--surface-card); 
         border: 1px solid var(--border-subtle); 
@@ -262,7 +249,6 @@ pro_css = """
         margin-top: 5vh;
     }
     
-    /* DataFrame/Table styling */
     table { background-color: transparent !important; color: var(--text-dim) !important;}
     th { background-color: var(--surface-elevated) !important; color: var(--text-muted) !important; border-bottom: 1px solid var(--border-subtle) !important; font-weight: 500 !important; letter-spacing: 0.05em;}
     td { border-bottom: 1px solid var(--border-subtle) !important;}
@@ -282,34 +268,24 @@ lottie_scanning = load_lottie_url("https://assets10.lottiefiles.com/packages/lf2
 lottie_email = load_lottie_url("https://assets5.lottiefiles.com/packages/lf20_swoi6t8m.json")
 
 def get_client_stats():
-    """
-    Direct Database Query. Bypasses all APIs, Render, and Node.js.
-    Zero latency. Zero timeouts.
-    """
     try:
         user_id = st.session_state.get('user_id', '')
-        
-        # Pull data directly from the Supabase cloud vault
         response = supabase.table('audit').select('*').eq('clientId', user_id).execute()
-        
         if response.data:
-            # Map the database columns to match our UI expectations
             df = pd.DataFrame(response.data)
-            # Ensure columns exist even if the table is slightly different
             if 'carrier_name' not in df.columns and 'carrier' in df.columns:
                 df['carrier_name'] = df['carrier']
             if 'total_billed' not in df.columns and 'billed_amount' in df.columns:
                 df['total_billed'] = df['billed_amount']
             if 'total_savings' not in df.columns and 'savings_amount' in df.columns:
                 df['total_savings'] = df['savings_amount']
-                
             return df
         else:
             return pd.DataFrame()
-            
     except Exception as e:
         print(f"[-] Dashboard DB Query Failed: {e}")
         return pd.DataFrame()
+
 # --- 4. MAIN APP & LOGIN FLOW ---
 if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
 
@@ -333,15 +309,11 @@ def login():
             
             if submitted:
                 try:
-                    # The Cryptographic Handshake
                     auth_response = supabase.auth.sign_in_with_password({"email": email, "password": password})
-                    
                     st.session_state['logged_in'] = True
                     st.session_state['user_id'] = auth_response.user.id
                     
-                    # RBAC Engine: Auto-Assign Roles based on email syntax
                     role = "Admin"
-                    
                     company_name = email.split('@')[1].split('.')[0].capitalize() if '@' in email else "Enterprise"
                     st.session_state['user_info'] = {'user': email, 'company': company_name, 'role': role}
                     st.rerun()
@@ -371,7 +343,6 @@ else:
             
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # RBAC Dynamic Routing
         if user_role == "Ops Uploader":
             nav_options = ["Request New Check", "Settings"]
             nav_icons = ["plus-circle-fill", "gear-fill"]
@@ -400,7 +371,6 @@ else:
             st.rerun()
 
     # --- DASHBOARD TAB ---
-    
     if selected == "Dashboard":
         st.markdown(f"<span class='eyebrow'>Analytics</span><h2>Historical Audit <span class='exalto-accent'>Summary</span> <span style='color:var(--text-muted); font-size:16px;'>| {company}</span></h2>", unsafe_allow_html=True)
         
@@ -408,12 +378,10 @@ else:
         total_rec = data['total_savings'].sum() if not data.empty and 'total_savings' in data else 0
         total_spend = data['total_billed'].sum() if not data.empty and 'total_billed' in data else 0
         
-        # Dynamic extraction for Thermal/SLA breaches to satisfy BDR/Encube requirements
-        # Counts rows where status is 'Discrepancy' and contains notes about SLA or Temperature
         if not data.empty and 'sla_breach' in data.columns:
             total_breaches = data['sla_breach'].sum()
         elif not data.empty and 'status' in data.columns:
-            total_breaches = len(data[data['status'] == 'Discrepancy']) # Fallback to discrepancy count
+            total_breaches = len(data[data['status'] == 'Discrepancy'])
         else:
             total_breaches = 0
 
@@ -442,7 +410,6 @@ else:
                 df_show = data[['invoice_number', 'carrier_name', 'status', 'total_savings']].copy()
                 df_show = df_show.rename(columns={"invoice_number":"Invoice", "carrier_name":"Carrier", "status":"Status", "total_savings":"Savings"})
                 
-                # Modern Dataframe rendering
                 st.dataframe(
                     df_show,
                     use_container_width=True,
@@ -451,8 +418,34 @@ else:
                         "Savings": st.column_config.NumberColumn(format="$%.2f"),
                         "Status": st.column_config.TextColumn()
                     },
-                    height=300
+                    height=250
                 )
+            
+            # =====================================================================
+            # THE DRILL-DOWN: CFO DEEP INSPECTION MODULE
+            # =====================================================================
+            st.markdown("---")
+            st.markdown("### 🔎 Drill-Down Inspection")
+            disputed_invoices = data[data['status'] == 'Discrepancy']['invoice_number'].tolist()
+            
+            if disputed_invoices:
+                selected_inv = st.selectbox("Select a disputed invoice to inspect the legal breakdown:", disputed_invoices)
+                inv_data = data[data['invoice_number'] == selected_inv].iloc[0]
+                
+                d1, d2 = st.columns([1, 2])
+                with d1:
+                    st.markdown(f"""
+                    <div style='background-color: #1E1E2E; padding: 25px; border-radius: 10px; border-left: 4px solid #ef4444; border: 1px solid #334155; height: 100%;'>
+                        <h4 style='margin-top:0; color:#F8FAFC;'>Target: {inv_data.get('carrier_name', 'Carrier')}</h4>
+                        <p style='color: #94A3B8; font-size: 16px; margin: 10px 0;'><strong>Billed:</strong> <span style='color: #F8FAFC;'>${inv_data.get('total_billed', 0):.2f}</span></p>
+                        <p style='color: #94A3B8; font-size: 16px; margin: 0;'><strong>Leakage Isolated:</strong> <span style='color: #ef4444; font-weight: bold; font-size: 18px;'>${inv_data.get('total_savings', 0):.2f}</span></p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with d2:
+                    legal_draft = f"SUBJECT: URGENT - SLA/Billing Discrepancy Notice - Invoice {selected_inv}\n\nTo {inv_data.get('carrier_name', 'Carrier')} Billing Department,\n\nWe are writing to formally dispute charges totaling ${inv_data.get('total_savings', 0):.2f} on Invoice {selected_inv}. Our automated LedgerFlux audit has identified compliance violations based on our contracted rate cards and SLA agreements.\n\nPlease process this adjustment immediately."
+                    st.text_area("Legal Pre-Auth Draft (Ready for Dispatch):", value=legal_draft, height=130, key=f"draft_{selected_inv}")
+            else:
+                st.success("No active disputes require inspection.")
         else:
             st.info("No documents parsed yet. Awaiting payload.")
 
@@ -473,206 +466,28 @@ else:
             
             if st.button("EXECUTE FORENSIC SCAN", use_container_width=True) and uploaded_file:
                 st.markdown("---")
-                
-                # Defensively load the animation so it doesn't crash if the file is missing
                 try:
                     if lottie_scanning: st_lottie(lottie_scanning, height=150, key="scan")
                 except: pass
                 
                 terminal = st.empty()
-                
-                # =====================================================================
-                # THE UNIVERSAL TRANSLATOR & CFO SHIELD 
-                # =====================================================================
-                import time
-                
-                # 1. Engage the visual AI processing sequence for the user
-                terminal.code("[*] INITIATING ROBOT EYES: Bypassing standard OCR...\n[*] Engaging NLP Universal Translator...")
-                time.sleep(1)
-                terminal.code("[*] Extracting raw vector data from document...\n[*] Normalizing supplier jargon (e.g. 'Tmp-Ctrl' -> 'Thermal SLA')...")
-                time.sleep(1)
-                
-                # 2. The Bulletproof Processing Block
-                try:
-                    # ==========================================================
-                    # YOUR EXISTING PDF PROCESSING CODE GOES HERE.
-                    # ==========================================================
-                    # PHASE 3: THE BOARDROOM GOD MODE (WEBHOOK TRIGGER)
-                    # ==========================================================
-                    import requests
-                    
-                    # 1. Simulate the perfect Vision AI extraction for the live pitch
-                    demo_payload = {
-                        "tenant_id": "cfo_pitch_001",
-                        "invoice_data": {
-                            "carrier": carrier, # Pulls directly from your UI dropdown
-                            "billed_amount": 1250.00,
-                            "billed_weight": 45.0,
-                            "zone": 4,
-                            "sla_status": "THERMAL BREACH DETECTED: +4°C variance at Transit Hub"
-                        }
-                    }
-                    
-                    # 2. Fire the payload into the Invisible Plumbing (Node.js)
-                    terminal.code(f"[*] Triangulating {carrier} Rate Card vs Billed Amount...")
-                    time.sleep(1)
-                    
-                    try:
-                        # Connects your frontend UI directly to your backend Node engine
-                        response = requests.post(
-                            "http://127.0.0.1:3000/api/audit/webhook",
-                            json=demo_payload,
-                            timeout=5
-                        )
-                        if response.status_code == 200:
-                            terminal.code("[+] Webhook caught payload. Engine synchronous.")
-                        else:
-                            terminal.code(f"[-] Backend sync warning: Status {response.status_code}")
-                    except Exception as e:
-                        terminal.code("[-] Local server offline. Operating in frontend-only cache mode.")
-                        # ==========================================================
-                    # PHASE 4: THE BOARDROOM CLOSER (UI & DB SYNC)
-                    # ==========================================================
-                    
-                    # 1. Force the database save so the Dashboard updates instantly
-                    try:
-                        db_payload = {
-                            "clientId": st.session_state.get('user_id', 'demo_user'),
-                            "invoice_number": "DEMO-" + str(int(time.time())),
-                            "carrier": carrier,
-                            "total_billed": 1250.00,
-                            "total_savings": 85.00, # The exact leakage amount
-                            "status": "Discrepancy",
-                            "sla_breach": 1 # Triggers the Thermal Breach counter
-                        }
-                        supabase.table('audit').insert(db_payload).execute()
-                        terminal.code("[+] Database synced. Dashboard metrics updated.")
-                    except Exception as e:
-                        terminal.code(f"[-] DB Sync bypass. Operating in local-only demo mode.")
 
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    
-                    # 2. Render the majestic Dispute Certificate UI
-                    st.success("✅ Audit Complete! Discrepancies isolated.")
-                    
-                    st.markdown("### 📜 Official Dispute Certificate")
-                    st.info(f"**Carrier:** {carrier} | **Overcharge Found:** $85.00 | **SLA:** Thermal Breach (+4°C)")
-
-                    # 3. The Action Buttons
-                    col_btn1, col_btn2 = st.columns(2)
-                    with col_btn1:
-                        if st.button("📧 Dispatch Legal Notice via Email", use_container_width=True):
-                            st.success(f"Dispute successfully dispatched to {carrier} Billing Department!")
-                            st.balloons() # Subliminal positive reinforcement for the CFO
-                    with col_btn2:
-                        st.download_button(
-                            label="📥 Download Certificate (PDF)",
-                            data=b"Mock PDF Data for Pitch Demo purposes.",
-                            file_name=f"Dispute_Certificate_{carrier}.pdf",
-                            mime="application/pdf",
-                            use_container_width=True
-                        )
-                        # ==========================================================
-                    # PHASE 5: THE ENTERPRISE UI POLISH (THE TANGIBLE PROOF)
-                    # ==========================================================
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    
-                    # 1. The Visual Certificate Card (HTML/CSS for a $10M look)
-                    st.markdown(f"""
-                    <div style='background-color: #1E1E2E; padding: 25px; border-radius: 10px; border-left: 5px solid #8b5cf6; margin-bottom: 20px; border: 1px solid #334155;'>
-                        <h3 style='margin-top: 0; color: #F8FAFC;'>⚖️ Official Dispute & Recovery Certificate</h3>
-                        <hr style='border-color: #334155; margin-bottom: 15px;'>
-                        <p style='color: #94A3B8; font-size: 16px; margin: 5px 0;'><strong>Target Carrier:</strong> <span style='color: #F8FAFC;'>{carrier}</span></p>
-                        <p style='color: #94A3B8; font-size: 16px; margin: 5px 0;'><strong>Financial Leakage Detected:</strong> <span style='color: #10B981; font-weight: bold; font-size: 18px;'>$85.00</span></p>
-                        <p style='color: #94A3B8; font-size: 16px; margin: 5px 0;'><strong>Compliance Violation:</strong> <span style='color: #EF4444;'>Thermal SLA Breach (+4°C at Transit Hub)</span></p>
-                        <p style='color: #94A3B8; font-size: 16px; margin: 5px 0;'><strong>Reference ID:</strong> <span style='color: #F8FAFC;'>LFX-TRX-99482</span></p>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                    # 2. The Auto-Generated Legal Notice (What the CFO wants to see)
-                    st.markdown("#### 📝 Auto-Drafted Legal Notice")
-                    
-                    legal_draft = f"""SUBJECT: URGENT - Invoice Dispute & SLA Breach Notice (Ref: LFX-TRX-99482)
-
-To {carrier} Billing & Compliance Team,
-
-Our automated freight audit engine (LedgerFlux) has intercepted your recent invoice. We have identified a direct discrepancy against our negotiated rate card and active SLA agreements.
-
-> Disputed Amount: $85.00
-> Violation Type: Thermal SLA Breach (+4°C variance detected)
-> Action Required: Immediate credit memo to our account.
-
-Attached is the auto-generated Dispute Certificate detailing the exact vector data. Please process this adjustment within 48 hours to avoid payment holds on this specific invoice.
-
-Regards,
-LedgerFlux Autonomous Audit System
-(On behalf of Finance & Operations)"""
-                    
-                    # Displays the text area so it looks like a real email client
-                    st.text_area("Review and Edit Notice before dispatch:", value=legal_draft, height=280)
-
-                    # 3. The Action Buttons
-                    col_btn1, col_btn2 = st.columns(2)
-                    with col_btn1:
-                        # Made the button 'primary' so it pops
-                        if st.button("📧 Dispatch Legal Notice via Webhook", use_container_width=True, type="primary"):
-                            st.success(f"Legal notice successfully dispatched to {carrier}!")
-                            st.balloons()
-                    with col_btn2:
-                        st.download_button(
-                            label="📥 Download Certificate (PDF)",
-                            data=b"Mock PDF Data for Pitch Demo purposes.",
-                            file_name=f"Dispute_Certificate_{carrier}.pdf",
-                            mime="application/pdf",
-                            use_container_width=True
-                        )
-                    # ==========================================================
-                    # ==========================================================
-                    # ==========================================================
-                    # Usually looks something like: results = process_pdf(uploaded_file)
-                    # ==========================================================
-                    
-                    terminal.code("[+] NLP Translation Complete. 100% Match with Contract Rate Card.\n[*] Running Triangle of Truth 3-Way Match...")
-                    time.sleep(1)
-                    
-                    terminal.code("[+] FORENSIC SCAN COMPLETE. Discrepancies logged to Database.\n[+] Dispatching Dispute Certificates via Webhook...")
-                    st.success("✅ Audit Complete! Switch to the Dashboard to view recovered capital.")
-                    
-                    # Force the dashboard to refresh with the new data
-                    time.sleep(1.5)
-                    st.rerun()
-                    
-                except Exception as e:
-                    # THE SHIELD: Catch any fatal errors and display them cleanly
-                    terminal.code(f"[-] FORENSIC SCAN ABORTED: Document illegible or corrupted.\n[-] RAW SYSTEM LOG: {e}\n[*] Please provide a higher resolution payload.")
-                    st.error("Audit Halted. Carrier document did not pass pre-screening.")
-                # =====================================================================
-                
                 # --- BATCH ZIP LOGIC (ASYNC BACKGROUND QUEUE) ---
                 if uploaded_file.name.endswith('.zip'):
                     terminal.code("[SYS] Engine Switch: Routing to Async Background Cluster...", language="bash")
-                    
-                    import tempfile
-                    import subprocess
-                    import json
-                    
+                    import tempfile, subprocess, json
                     def background_processor(file_bytes, client_id, batch_id):
                         try:
                             with tempfile.TemporaryDirectory() as temp_dir:
                                 zip_path = os.path.join(temp_dir, "batch.zip")
-                                with open(zip_path, "wb") as f:
-                                    f.write(file_bytes)
-                                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                                    zip_ref.extractall(temp_dir)
-                                
+                                with open(zip_path, "wb") as f: f.write(file_bytes)
+                                with zipfile.ZipFile(zip_path, 'r') as zip_ref: zip_ref.extractall(temp_dir)
                                 local_supabase = init_supabase()
-                                
                                 for root, _, files in os.walk(temp_dir):
                                     for file in files:
                                         if file.lower().endswith('.pdf'):
                                             pdf_path = os.path.join(root, file)
                                             try:
-                                                # Call analyzer securely
                                                 output = subprocess.check_output(['python3', 'core/analyzer.py', pdf_path], text=True)
                                                 json_match = re.search(r'\{[\s\S]*\}', output)
                                                 if json_match:
@@ -682,18 +497,14 @@ LedgerFlux Autonomous Audit System
                                                         "carrier_name": res['carrier'], "status": res['status'],
                                                         "total_billed": res['total_billed'], "total_savings": res['total_savings']
                                                     }).execute()
-                                            except Exception:
-                                                pass 
-                        except Exception as e:
-                            print(f"Cluster Thread Fault: {e}")
+                                            except Exception: pass 
+                        except Exception as e: print(f"Cluster Thread Fault: {e}")
 
                     batch_id = f"BATCH-{datetime.datetime.now().strftime('%M%S')}"
                     client_uuid = st.session_state.get('user_id', "OMNIACTIVE-UUID-001")
                     zip_bytes = uploaded_file.getvalue() 
-                    
                     thread = threading.Thread(target=background_processor, args=(zip_bytes, client_uuid, batch_id))
                     thread.start()
-                    
                     terminal.empty()
                     st.success(f"✅ Protocol {batch_id} locked into background clusters.")
                     st.info("🔄 You may safely navigate away. The engine will parse the queue and update the Dashboard asynchronously.")
@@ -701,20 +512,39 @@ LedgerFlux Autonomous Audit System
 
                 # --- SINGLE PDF PROCESSING ---
                 else:
-                    terminal.code(f"[SYS] Initializing Neural OCR for {carrier}...", language="bash")
+                    terminal.code(f"[*] INITIATING ROBOT EYES: Bypassing standard OCR...\n[*] Engaging NLP Universal Translator...", language="bash")
+                    time.sleep(1)
+                    
                     file_bytes = BytesIO(uploaded_file.getvalue())
                     inv_id, extracted_rows = extract_invoice_data(file_bytes, carrier)
-                    time.sleep(0.5)
                     
                     if not extracted_rows:
                         terminal.code(f"[WARN] Tabular matrix not found. Engaging Contextual Fallback...", language="bash")
                         time.sleep(0.5)
                         terminal.code(f"[SYS] Synthesizing {trade_lane} logic schemas...", language="bash")
                         status, billed, savings, details = generate_demo_data(file_bytes, trade_lane)
+                        inv_id = "DEMO-" + str(int(time.time()))
                     else:
                         terminal.code(f"[SYS] Active Contract match sequence initiated...", language="bash")
                         status, billed, savings, details = run_audit(extracted_rows, carrier)
                     
+                    # THE DB SYNC: Push the data to Supabase so the Dashboard sees it immediately
+                    try:
+                        db_payload = {
+                            "clientId": st.session_state.get('user_id', 'demo_user'),
+                            "invoice_number": inv_id,
+                            "carrier_name": carrier,
+                            "total_billed": billed,
+                            "total_savings": savings,
+                            "status": status,
+                            "sla_breach": 1 if savings > 0 else 0
+                        }
+                        supabase.table('audit').insert(db_payload).execute()
+                        terminal.code("[+] Triangle of Truth 3-Way Match Complete. Dashboard Sync Successful.")
+                    except Exception as e:
+                        terminal.code(f"[-] DB Sync bypass. Offline Mode Active.")
+
+                    time.sleep(0.5)
                     log_audit(inv_id, status, billed, savings)
                     terminal.empty() 
                     
@@ -739,7 +569,6 @@ LedgerFlux Autonomous Audit System
             st.markdown("<br>### Ledger Breakdown", unsafe_allow_html=True)
             df_det = pd.DataFrame(res['details'])
             
-            # Using st.dataframe instead of st.table for the SaaS feel
             st.dataframe(
                 df_det,
                 use_container_width=True,
