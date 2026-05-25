@@ -55,9 +55,11 @@ app.post('/api/audit/webhook', async (req, res) => {
     }
 });
 
-app.listen(3000, () => {
+// Render dynamically assigns a port. This tells the app to use Render's port, OR 3000 if running locally.
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, '0.0.0.0', () => {
     console.log('=============================================');
-    console.log('⚡ LEDGERFLUX INVISIBLE PLUMBING ONLINE');
-    console.log('⚡ Listening for Webhooks on Port 3000...');
+    console.log(`⚡ LEDGERFLUX INVISIBLE PLUMBING ONLINE ON PORT ${PORT}`);
     console.log('=============================================');
 });
